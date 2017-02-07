@@ -1,0 +1,7 @@
+[submodule "lib/qookery"]
+	path = lib/qookery
+	url = git://github.com/ergobyte/qookery.git
+[submodule "lib/qooxdoo-5.0"]
+	path = lib/qooxdoo-5.0
+	url = git://github.com/qooxdoo/qooxdoo.git
+	branch = branch_5_0_x

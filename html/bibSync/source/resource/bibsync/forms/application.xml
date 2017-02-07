@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form xmlns="http://www.qookery.org/ns/Form"
+  column-count="2" column-flexes="1 1" row-flexes="0 9 1" margin="10">
+
+    <import class="qookery.contexts.Qookery"/>
+
+    <tool-bar spacing="10" colum-count="4" column-flexes="5 1 5 1" col-span="2">
+        <select-box id="leftSelectBox">
+            <script event="changeSelection">
+                $.Qookery.getService("app").loadTree("left");
+            </script>
+        </select-box>
+
+        <button label="Reload">
+            <script event="execute">
+                $.Qookery.getService("app").loadTree("left");
+            </script>
+        </button>
+
+        <select-box id="rightSelectBox">
+            <script event="changeSelection">
+                $.Qookery.getService("app").loadTree("right");
+            </script>
+        </select-box>
+
+        <button label="Reload">
+            <script event="execute">
+                $.Qookery.getService("app").loadTree("right");
+            </script>
+        </button>
+
+    </tool-bar>
+
+    <composite column-flexes="1" row-flexes="1">
+        <virtual-tree id="leftTree" flex="1" row-flexes="1" label="%none">
+          <script event="changeSelection">
+              $.Qookery.getService("app").loadTable("left");
+          </script>
+        </virtual-tree>
+    </composite>
+    <composite column-flexes="1" row-flexes="1">
+        <virtual-tree id="rightTree" row-flexes="1" label="%none">
+          <script event="changeSelection">
+              $.Qookery.getService("app").loadTable("right");
+          </script>
+        </virtual-tree>
+    </composite>
+    <composite column-flexes="1" row-flexes="1">
+    <table id="leftTable" connect="leftTableData" label="%none" height="200" >
+        <table-model class="qookery.impl.DefaultTableModel"/>
+        <table-column connect="authors" label="Authors" width="1*"/>
+        <table-column connect="title" label="Title" width="2*" />
+        <table-column connect="date"  label="Date" width="S" />
+    </table>
+      </composite>
+    <composite column-flexes="1" row-flexes="1">
+    <table id="rightTable" connect="rightTableData" label="%none" height="200" >
+        <table-model class="qookery.impl.DefaultTableModel"/>
+        <table-column connect="authors" label="Authors" width="S"/>
+        <table-column connect="title" label="Title" width="1*" />
+        <table-column connect="date"  label="Date" width="1*" />
+    </table>
+      </composite>
+</form>

@@ -1,0 +1,6 @@
+module.exports = {
+  zotero : {
+    apiKey : "<your API key>",
+    userId : <your user id>
+  }
+} ;

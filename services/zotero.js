@@ -4,6 +4,7 @@ module.exports =
 {
   /**
    * Return the data of available libraries
+   * /zotero/libraries
    */
   libraries : function(req, res) {
     zoteroAPI.getLibraries()
@@ -18,7 +19,7 @@ module.exports =
 
   /**
    * Return the data of all collections in a flat structure
-   * zotero/:type/:id/collections/flat
+   * /zotero/:type/:id/collections/flat
    */
   collectionsFlat : function(req, res) {
     var type  = req.params.type;
@@ -55,15 +56,13 @@ module.exports =
           result[key].index = nodes.length-1;
         }
         // second pass: attach children
-        try{
         for ( key in result )
         {
           var childNode  = nodes[result[key].index];
           var parentKey  = result[key].parent;
           var parentNode = parentKey ? nodes[result[parentKey].index] : nodes[0];
           parentNode.children.push(childNode);
-        }
-      }catch(e){console.warn(e);}
+        }    
         res.json( nodes );
       })
       .catch(function(err){

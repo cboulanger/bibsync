@@ -1,8 +1,8 @@
 Bibsync
 =======
 
-A tool to synchronize bibliographic data across applications. Currently the
-following applications are being implemented:
+A tool to synchronize bibliographic data across applications. Currently support
+for the following applications is being implemented:
 
 - Zotero (http://www.zotero.org)
 - Bookends (http://www.sonnysoftware.com)

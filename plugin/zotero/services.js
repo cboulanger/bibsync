@@ -1,4 +1,4 @@
-var zoteroAPI  = require("../api/zotero");
+var api  = require("./api");
 
 module.exports =
 {
@@ -7,11 +7,12 @@ module.exports =
    * /zotero/libraries
    */
   libraries : function(req, res) {
-    zoteroAPI.getLibraries()
+    api.getLibraries()
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -24,11 +25,12 @@ module.exports =
   collectionsFlat : function(req, res) {
     var type  = req.params.type;
     var libId = req.params.id;
-    zoteroAPI.getCollections(type, libId)
+    api.getCollections(type, libId)
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -40,7 +42,7 @@ module.exports =
   collectionsTree : function(req, res) {
     var type  = req.params.type;
     var libId = req.params.id;
-    zoteroAPI.getCollections(type, libId)
+    api.getCollections(type, libId)
       .then(function( result ){
 
         var nodes = [{children:[]}];
@@ -62,10 +64,11 @@ module.exports =
           var parentKey  = result[key].parent;
           var parentNode = parentKey ? nodes[result[parentKey].index] : nodes[0];
           parentNode.children.push(childNode);
-        }    
+        }
         res.json( nodes );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -76,38 +79,39 @@ module.exports =
    */
   collectionIds : function(req,res)
   {
-    res.status(500).send("Not implemented");
-    // var type = req.params.type;
-    // var id   = req.params.id;
-    // var collection = req.params.collection;
-    // zoteroAPI.getCollectionIds()
-    //   .then(function( result ){
-    //     result = result.map(function(value){ return parseInt(value); });
-    //     res.json( result );
-    //   })
-    //   .catch(function(err){
-    //     res.status(500).send(err);
-    //   });
-  },
-
-
-  /**
-   * Returns the data of the references in a collection
-   * /zotero/:type/:libId/collection/:collection/ids
-   */
-  collectionItems : function(req,res)
-  {
     var type = req.params.type;
     var id   = req.params.id;
     var collection = req.params.collection;
-    zoteroAPI.getCollectionItems(type, id, collection)
+    api.getCollectionIds(type,id,collection)
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
+
+
+  /**
+   * Returns a summary of the data of the references in a collection (author, title, year)
+   * /zotero/:type/:libId/collection/:collection/summary
+   */
+  collectionItemsSummary : function(req,res)
+  {
+    var type = req.params.type;
+    var id   = req.params.id;
+    var collection = req.params.collection;
+    api.getCollectionItems(type, id, collection, ['id','creatorSummary','title','year'])
+      .then(function( result ){
+        res.json( result );
+      })
+      .catch(function(err){
+        console.warn(err);
+        res.status(500).send(err);
+      });
+  },
+
 
   /**
    * /format/:ids
@@ -115,11 +119,12 @@ module.exports =
    */
   formatReferences : function(req,res)
   {
-    zoteroAPI.getFormattedRefs(req.params.ids,req.params.style)
+    api.getFormattedRefs(req.params.ids,req.params.style)
       .then(function( result ){
           res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -131,11 +136,12 @@ module.exports =
    */
   reference : function(req,res)
   {
-    zoteroAPI.getReferenceData(req.params.ids)
+    api.getReferenceData(req.params.ids)
       .then(function( result ){
-          res.json( result );
+        res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -146,11 +152,12 @@ module.exports =
    */
   moddates : function(req,res)
   {
-    zoteroAPI.getModificationDates(req.params.ids)
+    api.getModificationDates(req.params.ids)
       .then(function( result ){
-          res.json( result );
+        res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -161,11 +168,12 @@ module.exports =
    */
   get : function(req,res)
   {
-    zoteroAPI.get(req.params.ids,req.params.field)
+    api.get(req.params.ids,req.params.field)
       .then(function( result ){
-          res.json( result );
+        res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   }

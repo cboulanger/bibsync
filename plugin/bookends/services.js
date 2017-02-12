@@ -1,4 +1,4 @@
-var bookendsAPI  = require("../api/bookends");
+var api  = require("./api");
 
 var cache = {};
 
@@ -10,11 +10,12 @@ module.exports =
    * /zotero/libraries
    */
   libraries : function(req, res) {
-    bookendsAPI.getLibraries()
+    api.getLibraries()
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -24,11 +25,12 @@ module.exports =
    * /bookends/:type/:id/collections/flat
    */
   collectionsFlat : function(req, res) {
-    bookendsAPI.getCollections()
+    api.getCollections()
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -39,7 +41,7 @@ module.exports =
    */
   collectionsTree : function(req, res) {
 
-    bookendsAPI.getCollections()
+    api.getCollections()
       .then(function( result ){
 
         var nodes = [{children:[]}];
@@ -55,7 +57,6 @@ module.exports =
           result[key].index = nodes.length-1;
         }
         // second pass: attach children
-        try{
         for ( key in result )
         {
           var childNode  = nodes[result[key].index];
@@ -63,15 +64,16 @@ module.exports =
           var parentNode = parentKey ? nodes[result[parentKey].index] : nodes[0];
 
           // hack to get rid of corrupted top folders without children
-          if( parentNode === nodes[0] && childNode.children.length == 0 ) continue;
+          if( parentNode === nodes[0] && childNode.children.length === 0 ) continue;
 
           parentNode.children.push(childNode);
         }
-      }catch(e){console.warn(e);}
+
         cache.tree = nodes;
         res.json( nodes );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -83,37 +85,29 @@ module.exports =
    */
   collectionIds : function(req,res)
   {
-    bookendsAPI.getCollectionIDs(null,null, req.params.collection)
+    api.getCollectionIDs(null,null, req.params.collection)
       .then(function( result ){
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
 
   /**
-   * Returns the data of the references in a collection
-   * /bookends/:type/:libId/collection/:collection/ids
+   * Returns the data of the references in a collection (author,title,year)
+   * /bookends/:type/:libId/collection/:collection/summary
    */
-  collectionItems : function(req,res)
+  collectionItemsSummary : function(req,res)
   {
     var collection = req.params.collection;
-    bookendsAPI.getCollectionItems(null, null, collection)
+    api.getCollectionItems(null, null, collection, ['id','creatorSummary','title','year'])
       .then(function( result ){
-        result = result.map(function(item) {
-          return {
-            authors: item.authors || item.editors,
-            title: item.title,
-            date: item.date
-          };
-        });
-        result.sort(function(a,b){
-          return ( a.authors < b.authors ) ? -1 : ( a.authors == b.authors ) ? 0 : 1 ;
-        });
         res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -126,11 +120,12 @@ module.exports =
   {
     var ids = req.params.ids.split(/,/);
     var style = req.params.style;
-    bookendsAPI.getFormattedRefs( ids, style )
+    api.getFormattedRefs( ids, style )
       .then(function( result ){
           res.json( result );
       })
       .catch(function(err){
+        console.warn(err);
         res.status(500).send(err);
       });
   },
@@ -143,7 +138,7 @@ module.exports =
   reference : function(req,res)
   {
     var ids = req.params.ids.split(/,/);
-    bookendsAPI.getReferenceData(ids)
+    api.getReferenceData(ids)
       .then(function( result ){
           res.json( result );
       })
@@ -158,7 +153,7 @@ module.exports =
    */
   moddates : function(req,res)
   {
-    bookendsAPI.getModificationDates(req.params.ids)
+    api.getModificationDates(req.params.ids)
       .then(function( result ){
           res.json( result );
       })
@@ -173,7 +168,7 @@ module.exports =
    */
   get : function(req,res)
   {
-    bookendsAPI.get(req.params.ids,req.params.field)
+    api.get(req.params.ids,req.params.field)
       .then(function( result ){
           res.json( result );
       })

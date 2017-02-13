@@ -332,11 +332,18 @@ module.exports = {
                     if( content) globalItem[globalField] = content;
                   }
                 }
+                // add special fields
+                if ( fields instanceof Array) {
+                  if( fields.indexOf("creatorSummary") !== -1 )
+                    globalItem.creatorSummary = item.authors || item.editors;
+                  if( fields.indexOf("year") !== -1 )
+                    globalItem.year = item.date;
+                }
 
-                globalItem.creatorSummary = item.authors || item.editors;
 
                 // add a unique id for synchronization
                 globalItem.syncId = "bookends#" + item.id;
+
 
                 return globalItem;
 

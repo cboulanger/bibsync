@@ -373,7 +373,7 @@ var fields_toGlobal =
     translateContent : function(data){
       var content = data.tags.reduce(function(result, elem){
         return result + "; " + elem.tag;
-      });
+      },"");
       return content;
     }
   },

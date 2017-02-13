@@ -102,7 +102,7 @@ module.exports =
   collectionItemsSummary : function(req,res)
   {
     var collection = req.params.collection;
-    api.getCollectionItems(null, null, collection, ['id','creatorSummary','title','date'])
+    api.getCollectionItems(null, null, collection, ['id','creatorSummary','title','year'])
       .then(function( result ){
         res.json( result );
       })

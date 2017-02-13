@@ -10,6 +10,7 @@ module.exports = function bookends(bibsync, done) {
   app.get('/bookends/:type/:id/collections/tree', service.collectionsTree);
   app.get('/bookends/:type/:id/collection/:collection/ids', service.collectionIds );
   app.get('/bookends/:type/:id/collection/:collection/summary', service.collectionItemsSummary );
+  app.get('/bookends/:type/:id/collection/:collection/items', service.collectionItems );
 
   app.get('/bookends/format/:ids/:style', service.formatReferences );
   app.get('/bookends/reference/:ids', service.reference );

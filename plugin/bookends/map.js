@@ -1,4 +1,7 @@
-var types =
+/**
+ * Map global to local types
+ */
+var types_toLocal =
 { abstract: false,
   audiovisual: 'Audiovisual material',
   audio: 'Audiovisual material',
@@ -68,14 +71,39 @@ var types =
   webpage: 'Internet'
 };
 
-
-var fields =
+/**
+ * Map global to local fields
+ */
+var fields_toLocal =
 { id: 'id',
-  type: 'type',
+  itemType: {
+    translateFieldName : function(data) {
+      return 'type';
+    },
+    translateContent : function(data)
+    {
+      var localType = types_toLocal[data.itemType];
+      if( typeof localType == "function" ){
+        localType = localType(data);
+      }
+      //console.log("Type:" + data.itemType + " -> " + localType);
+      return localType || "Journal article";
+    }
+  },
   key: 'user1',
   accessDate: 'user20',
   abstract: 'abstract',
-  authors: 'authors',
+  authors: {
+    translateFieldName : function(data) {
+      return 'authors';
+    },
+    translateContent : function(data)
+    {
+      return data.authors.split(/;/).map(function(elem){
+        return elem.trim();
+      }).join(", and ");
+    }
+  },
   authorTranslated: 'user9',
   applicationNumber: false,
   attachments: 'attachments',
@@ -88,7 +116,17 @@ var fields =
   dateAdded: 'added',
   doi: 'user17',
   edition: 'user2',
-  editors: 'editors',
+  editors: {
+    translateFieldName : function(data) {
+      return 'editors';
+    },
+    translateContent : function(data)
+    {
+      return data.editors.split(/;/).map(function(elem){
+        return elem.trim();
+      }).join(", and ");
+    }
+  },
   issue: 'issue',
   isbn: 'user6',
   issn: 'user6',
@@ -199,11 +237,148 @@ var fields =
   custom4: 'user15',
   custom5: 'user16',
   custom6: 'user19',
-  syncId: 'user20'
+  custom7: 'user20'
 };
 
+/**
+ * Map local to global types
+ */
+var types_toGlobal = {
+  'Audiovisual material': 'video',
+  'Journal article': 'journalArticle#',
+  Artwork: 'artwork',
+  Internet: 'webpage',
+  Book: 'book',
+  'Book chapter': 'bookSection',
+  'Conference proceedings': 'proceedings',
+  Dissertation: 'thesis',
+  Editorial: 'editorial',
+  'Edited book': 'collection',
+  'Journal Article': 'earticle',
+  'Personal communication': 'personal',
+  'In press': 'inpress',
+  book: 'journal',
+  Letter: 'pamphlet',
+  Map: 'map',
+  'Newspaper article': 'newspaperArticle',
+  patent: 'patent',
+  Review: 'review'
+};
 
+/**
+ * Map local to global fields
+ */
+var fields_toGlobal =
+{ id: 'id',
+  type: {
+  translateFieldName : function(data) {
+    return 'itemType';
+  },
+  translateContent : function(data)
+  {
+    var globalType = types_toGlobal[data.type];
+    if( typeof globalType == "function" ){
+      globalType = globalType(data);
+    }
+    //console.log("Type:" + data.itemType + " -> " + localType);
+    return globalType || "journalArticle";
+  }
+},
+  user1: 'key',
+  user20: 'syncId',
+  abstract: 'abstract',
+  authors: {
+    translateFieldName : function(data) {
+      return 'authors';
+    },
+    translateContent : function(data)
+    {
+      return data.authors.split(/, and /).join("; ");
+    }
+  },
+  user9: 'authorTranslated',
+  editors : {
+    translateFieldName : function(data) {
+      return 'editors';
+    },
+    translateContent : function(data)
+    {
+      return data.editors.split(/, and /).join("; ");
+    }
+  },
+  attachments: 'attachments',
+  journal: 'websiteTitle',
+  groups: 'collections',
+  user5: 'callNumber',
+  date: 'date',
+  added: 'dateAdded',
+  user17: 'doi',
+  user2: 'edition',
+  editors: 'editors',
+  issue: 'reportNumber',
+  user6: function(item){
+    switch (item.type) {
+      case "journal":
+      case "journalArticle":
+       return "issn";
+      default:
+        return "isbn";
+      }
+  },
+  publisher: 'university',
+  keywords: 'keywords',
+  user7: 'language',
+  location: 'place',
+  notes: 'notes',
+  user13: 'numPages',
+  user11: 'originalPublication',
+  pages: 'pages',
+  user18: 'pubmedId',
+  user12: 'reprintEdition',
+  title: 'title',
+  title2: 'title2',
+  user10: 'titleTranslated',
+  user3: 'translator',
+  url: 'url',
+  user4: 'custom1',
+  user8: 'custom2',
+  user14: 'custom3',
+  user15: 'custom4',
+  user16: 'custom5',
+  user19: 'custom6',
+  volume : function(item){
+    switch (item.type) {
+      case "Book chapter": return "bookTitle";
+      default: return "volume";
+    }
+  }
+};
+
+/**
+ * Module definition
+ */
 module.exports = {
-  fields : fields,
-  types  : types
+  types : {
+    toLocal : types_toLocal,
+    toGlobal  : types_toGlobal
+  },
+  fields : {
+    toLocal : fields_toLocal,
+    toGlobal  : fields_toGlobal
+  },
+  translateName : function( map, field, data ){
+    if (typeof map[field] == "function") {
+      return map[field](data);
+    }
+    if (typeof map[field] == "object" && typeof map[field].translateFieldName == "function") {
+      return map[field].translateFieldName(data);
+    }
+    return map[field];
+  },
+  translateContent : function( map, field, data ){
+    if (typeof map[field] == "object" && typeof map[field].translateContent == "function") {
+      return map[field].translateContent(data);
+    }
+    return data[field];
+  }
 };

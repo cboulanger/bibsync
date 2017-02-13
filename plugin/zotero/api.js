@@ -14,8 +14,9 @@ var global_map    = require('../bibsync/map');
 var global_types  = global_map.types;
 var global_fields = global_map.fields;
 var local_map     = require('./map');
-var local_types   = _.invert(local_map.types);
-var local_fields  = _.invert(local_map.fields);
+var local_types   = local_map.types.toGlobal;
+var local_fields  = local_map.fields.toGlobal; // TODO
+
 
 //console.log( "\n\nzotero_fields:");
 //console.dir(zotero_fields);
@@ -83,12 +84,10 @@ module.exports = {
    * @param  {String} globalField The name of the global field
    * @param  {Map} data        The reference data
    * @return {String}
+   * TODO
    */
   getLocalField: function(globalField, data) {
-    if (typeof local_map.fields[globalField] == "function") {
-      return local_map.fields[globalField](data);
-    }
-    return local_map.fields[globalField];
+    return local_map.translateName(local_map.fields.toLocal, globalField, data);
   },
 
   /**
@@ -96,12 +95,36 @@ module.exports = {
    * @param  {String} localField The name of the local field
    * @param  {Map} data        The reference data
    * @return {String}
+   * TODO
    */
   getGlobalField: function(localField, data) {
-    if (typeof local_fields[localField] == "function") {
-      return local_fields[localField](data);
-    }
-    return local_fields[localField];
+    return local_map.translateName(local_map.fields.toGlobal, localField, data);
+  },
+
+  /**
+   * Given a local field content, return the global field content
+   * @param  {String} localField The name of the global field
+   * @param  {Map} data        The reference data
+   * @return {String|Map} If String, the content of the given local field. If
+   *                      Map, the keys and values of several local fields
+   * TODO
+   */
+  getGlobalContent: function(localField, data) {
+    //console.log("localField:"+localField);
+    //console.dir (data );
+    return local_map.translateContent(local_map.fields.toGlobal, localField, data);
+  },
+
+  /**
+   * Given a global field content, return the local field content
+   * @param  {String} localField The name of the local field
+   * @param  {Map} data        The reference data
+   * @return {String|Map} If String, the content of the given local field. If
+   *                      Map, the keys and values of several local fields‚
+   * TODO
+   */
+  getLocalContent: function(globalField, data) {
+    return local_map.translateContent(local_map.fields.toLocal, globalField, data);
   },
 
   /**
@@ -109,7 +132,7 @@ module.exports = {
    * @return {String}
    */
   getSyncIdField : function(){
-    return "key";
+    return "extra";
   },
 
   /**
@@ -338,23 +361,43 @@ module.exports = {
       }).then(function(data) {
         var result = [];
         data.loadedItems.forEach(function(item){
-          var newItem = {};
+          var globalItem = {};
           if ( fields instanceof Array && fields.length )
           {
             fields.forEach(function(field){
-              newItem[field] = item.get( that.getLocalField(field) || field);
+              globalItem[field] = item.get( that.getLocalField(field) || field ); // TODO!
             });
           } else {
+            //console.log("=======================================================");
+            //console.dir(item.apiObj.data );
+            //console.log("=======================================================");
             for (var key in item.apiObj.data )
             {
-              var globalField = that.getGlobalField(key);
+              var globalField = that.getGlobalField(key,  item.apiObj.data);
               if ( globalField ){
-                newItem[globalField] = item.apiObj.data[key];
+                var content = that.getGlobalContent( key, item.apiObj.data );
+                if ( typeof content == "object" ){
+                  for(var key2 in content )
+                  {
+                    globalItem[key2] = content[key2];
+                  }
+                } else if( content ) {
+                  globalItem[globalField] = content;
+                }
               }
             }
           }
-          newItem.syncId = item.key;
-          result.push(newItem);
+
+          // add a unique id for synchronization
+          globalItem.syncId = "zotero#" +item.key;
+
+          // add type if missing
+          if ( ! globalItem.itemType )
+          {
+            globalItem.itemType = that.getGlobalContent( "itemType", item.apiObj.data);
+          }
+
+          result.push(globalItem);
         });
         resolve(result);
       }).catch(reject);

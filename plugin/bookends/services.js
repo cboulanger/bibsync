@@ -96,13 +96,30 @@ module.exports =
   },
 
   /**
-   * Returns the data of the references in a collection (author,title,year)
+   * Returns the summary of the reference data in a collection (author,title,year)
    * /bookends/:type/:libId/collection/:collection/summary
    */
   collectionItemsSummary : function(req,res)
   {
     var collection = req.params.collection;
-    api.getCollectionItems(null, null, collection, ['id','creatorSummary','title','year'])
+    api.getCollectionItems(null, null, collection, ['id','creatorSummary','title','date'])
+      .then(function( result ){
+        res.json( result );
+      })
+      .catch(function(err){
+        console.warn(err);
+        res.status(500).send(err);
+      });
+  },
+
+  /**
+   * Returns the data of the references in a collection
+   * /bookends/:type/:libId/collection/:collection/items
+   */
+  collectionItems : function(req,res)
+  {
+    var collection = req.params.collection;
+    api.getCollectionItems(null, null, collection )
       .then(function( result ){
         res.json( result );
       })

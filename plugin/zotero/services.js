@@ -112,6 +112,24 @@ module.exports =
       });
   },
 
+  /**
+   * Returns the reference data in a collection
+   * /zotero/:type/:libId/collection/:collection/items
+   */
+  collectionItems : function(req,res)
+  {
+    var type = req.params.type;
+    var id   = req.params.id;
+    var collection = req.params.collection;
+    api.getCollectionItems(type, id, collection)
+      .then(function( result ){
+        res.json( result );
+      })
+      .catch(function(err){
+        console.warn(err);
+        res.status(500).send(err);
+      });
+  },
 
   /**
    * /format/:ids

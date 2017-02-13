@@ -10,24 +10,9 @@ var global_map    = require('../bibsync/map');
 var global_types  = global_map.types;
 var global_fields = global_map.fields;
 var local_map     = require('./map');
-var local_types   = _.invert(local_map.types);
-var local_fields  = _.invert(local_map.fields);
+var local_types   = local_map.types.toGlobal;
+var local_fields  = local_map.fields.toGlobal; // TODO
 
-local_fields.volume = function(item){
-  switch (item.type) {
-    case "bookSection": return "bookTitle";
-    default: return "volume";
-  }
-};
-local_fields.user6 = function(item){
-  switch (item.type) {
-    case "journal":
-    case "journalArticle":
-     return "issn";
-    default:
-      return "isbn";
-  }
-};
 
 /**
  * Given an event code, return the AppleScript command
@@ -50,24 +35,28 @@ function eventCode(eventCode) {
 function evalOSA(OSACommand, splitChar, transformFunc) {
   return new Promise(function(resolve, reject) {
     console.log(OSACommand);
-    osascript.execute(OSACommand, {},
-      function(err, result, raw) {
-        if (result.indexOf("No Bookends library window is open") !== -1) {
-          err = "No Bookends library window is open";
+    try
+    {
+      osascript.execute(OSACommand, {},
+        function(err, result, raw) {
+          if ( (result||"").indexOf("No Bookends library window is open") !== -1) {
+            err = "No Bookends library window is open";
+          }
+          if ( err ) {
+            return reject(err);
+          }
+          // transform
+          if (typeof transformFunc == "function") {
+            result = transformFunc(result);
+          }
+          // split
+          result = result.split(new RegExp(splitChar || "\r"));
+          resolve(result);
         }
-        if (err) {
-          console.log("Error: " + err);
-          return reject(err);
-        }
-        // transform
-        if (typeof transformFunc == "function") {
-          result = transformFunc(result);
-        }
-        // split
-        result = result.split(new RegExp(splitChar || "\r"));
-        resolve(result);
-      }
-    );
+      );
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
@@ -92,12 +81,10 @@ module.exports = {
    * @param  {String} globalField The name of the global field
    * @param  {Map} data        The reference data
    * @return {String}
+   * TODO
    */
   getLocalField: function(globalField, data) {
-    if (typeof local_map.fields[globalField] == "function") {
-      return local_map.fields[globalField](data);
-    }
-    return local_map.fields[globalField];
+    return local_map.translateName(local_map.fields.toLocal, globalField, data);
   },
 
   /**
@@ -105,13 +92,38 @@ module.exports = {
    * @param  {String} localField The name of the local field
    * @param  {Map} data        The reference data
    * @return {String}
+   * TODO
    */
   getGlobalField: function(localField, data) {
-    if (typeof local_fields[localField] == "function") {
-      return local_fields[localField](data);
-    }
-    return local_fields[localField];
+    return local_map.translateName(local_map.fields.toGlobal, localField, data);
   },
+
+  /**
+   * Given a local field content, return the global field content
+   * @param  {String} localField The name of the global field
+   * @param  {Map} data        The reference data
+   * @return {String|Map} If String, the content of the given local field. If
+   *                      Map, the keys and values of several local fields
+   * TODO
+   */
+  getGlobalContent: function(localField, data) {
+    //console.log("localField:"+localField);
+    //console.dir (data );
+    return local_map.translateContent(local_map.fields.toGlobal, localField, data);
+  },
+
+  /**
+   * Given a global field content, return the local field content
+   * @param  {String} localField The name of the local field
+   * @param  {Map} data        The reference data
+   * @return {String|Map} If String, the content of the given local field. If
+   *                      Map, the keys and values of several local fields‚
+   * TODO
+   */
+  getLocalContent: function(globalField, data) {
+    return local_map.translateContent(local_map.fields.toLocal, globalField, data);
+  },
+
 
   /**
    * Return the field name that is used to store a unique id that is used for synchronization
@@ -300,16 +312,34 @@ module.exports = {
       that.getCollectionIDs(null, null, collectionKey)
         .then( function(ids) {
           if( ids.length === 0 ) return resolve([]);
+
           that.getReferenceData(ids)
             .then(function(result){
               result = result.map(function(item){
-                // fix author data
-                item.creatorSummary = item.authors || item.editors;
-                ['authors','editors'].forEach(function(fields){
-                  //
-                });
-                item.syncId = item.syncId || md5(item.title);
-                return item;
+                //console.log("=======================================================");
+                //console.dir( item );
+                //console.log("=======================================================");
+
+                var globalItem = {};
+
+                for ( var key in item )
+                {
+                  if ( fields instanceof Array && fields.indexOf(key) ===-1 ) continue;
+
+                  var globalField = that.getGlobalField(key,  item);
+                  if ( globalField ){
+                    var content = that.getGlobalContent(key, item);
+                    if( content) globalItem[globalField] = content;
+                  }
+                }
+
+                globalItem.creatorSummary = item.authors || item.editors;
+
+                // add a unique id for synchronization
+                globalItem.syncId = "bookends#" + item.id;
+
+                return globalItem;
+
               }).sort(function(a,b){
                 return ( a.creatorSummary < b.creatorSummary ) ? -1 : ( a.creatorSummary == b.creatorSummary ) ? 0 : 1 ;
               });
@@ -456,17 +486,15 @@ module.exports = {
             taggedData.split(/\r/).map(function(line) {
               var i = line.indexOf(":");
               var maybeFieldName = line.substring(0, i);
-              var maybeGlobalField = that.getGlobalField(maybeFieldName, dict);
-              if ( maybeGlobalField ) {
-                fieldName = maybeGlobalField;
+              if ( local_map.fields.toGlobal[maybeFieldName] !== undefined) {
+                fieldName = maybeFieldName;
                 dict[fieldName] = line.substring(i + 2);
-              } else if (fieldName && maybeGlobalField === undefined) {
+              } else if (fieldName && maybeFieldName === undefined) {
                 if (line.length > 0 || fieldName == "abstract" || fieldName == "notes") {
                   dict[fieldName] += "\n" + line;
                 }
               }
             });
-            dict.type = local_types[dict.type] || "journalArticle"; // TODO
             if (fieldName) {
               data.push(dict);
             }

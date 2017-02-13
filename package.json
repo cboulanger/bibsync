@@ -12,10 +12,14 @@
   "dependencies": {
     "citation-js": "^0.2.14",
     "express": "^4.14.0",
+    "glob": "^7.1.1",
     "json-client": "^0.8.4",
     "libzotero": "^0.1.8",
     "md5": "^2.2.1",
     "node-osascript": "^1.0.4",
-    "promise": "^7.1.1"
+    "pluginable": "^2.1.1",
+    "promise": "^7.1.1",
+    "socket.io": "^1.7.2",
+    "underscore": "^1.8.3"
   }
 }

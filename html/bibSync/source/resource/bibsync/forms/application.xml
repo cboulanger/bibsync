@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<form xmlns="http://www.qookery.org/ns/Form" column-count="2" column-flexes="1 1" row-flexes="0 9 1" margin="10">
+<form xmlns="http://www.qookery.org/ns/Form"
+  column-count="2" column-flexes="1 1" row-flexes="0 9 0 0" margin="10">
 
     <import class="qookery.contexts.Qookery"/>
 
     <tool-bar spacing="10" colum-count="4" column-flexes="5 1 5 1" col-span="2">
-        <select-box id="leftSelectBox">
-        </select-box>
+        <select-box id="leftSelectBox"></select-box>
 
         <button label="Load">
             <script event="execute">
@@ -13,8 +13,7 @@
             </script>
         </button>
 
-        <select-box id="rightSelectBox">
-        </select-box>
+        <select-box id="rightSelectBox"></select-box>
 
         <button label="Load">
             <script event="execute">
@@ -39,19 +38,67 @@
         </virtual-tree>
     </composite>
     <composite column-flexes="1" row-flexes="1" min-width="500">
-        <table id="leftTable" connect="leftTableData" label="%none" height="200">
+        <table id="leftTable" label="%none" height="200">
             <table-model class="qookery.impl.DefaultTableModel"/>
-            <table-column connect="authors" label="Creators" width="1*"/>
+            <table-column connect="creatorSummary" label="Creators" width="1*"/>
             <table-column connect="title" label="Title" width="2*"/>
-            <table-column connect="date" label="Date" width="S"/>
+            <table-column connect="year" label="Year" width="S"/>
         </table>
     </composite>
     <composite column-flexes="1" row-flexes="1" min-width="500">
-        <table id="rightTable" connect="rightTableData" label="%none" height="200">
+        <table id="rightTable" label="%none" height="200">
             <table-model class="qookery.impl.DefaultTableModel"/>
-            <table-column connect="authors" label="Creators" width="1*"/>
+            <table-column connect="creatorSummary" label="Creators" width="1*"/>
             <table-column connect="title" label="Title" width="1*"/>
-            <table-column connect="date" label="Date" width="S"/>
+            <table-column connect="year" label="Year" width="S"/>
         </table>
     </composite>
+
+    <composite column-count="auto" align-x="center" column-flexes="1 1" max-width="300" col-span="2">
+
+        <button label="Sync left to right" id="btnSyncLeftRight" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").sync("left", "right");
+            </script>
+        </button>
+        <button label="Sync right to left" id="btnSyncRightLeft" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").sync("right", "left");
+            </script>
+        </button>
+    </composite>
+
+    <!-- window to resolve sync conflicts -->
+
+    <form display="none" id="editor" column-count="2" column-flexes="1 1" row-flexes="0 1 0" title="Compare window">
+
+
+
+        <table id="leftDetails" label="%none" height="500" width="300">
+            <table-model class="qookery.impl.DefaultTableModel"/>
+            <table-column connect="field" label="Field" width="S"/>
+            <table-column connect="value" label="Value" width="1*"/>
+        </table>
+
+        <table id="rightDetails" label="%none" height="500" width="300">
+            <table-model class="qookery.impl.DefaultTableModel"/>
+            <table-column connect="field" label="Field" width="S"/>
+            <table-column connect="value" label="Value" width="1*"/>
+        </table>
+
+        <composite column-count="auto" align-x="center" max-width="300" column-flexes="1 1" col-span="2">
+            <button label="OK">
+                <script event="execute">
+                    $.form.close($.form.getModel());
+                </script>
+            </button>
+            <button label="Cancel">
+                <script event="execute">
+                    $.form.close(null);
+                </script>
+            </button>
+        </composite>
+
+    </form>
+
 </form>

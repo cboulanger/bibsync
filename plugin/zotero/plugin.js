@@ -9,6 +9,7 @@ module.exports = function zotero(bibsync, done) {
   app.get('/zotero/:type/:id/collections/tree', service.collectionsTree);
   app.get('/zotero/:type/:id/collection/:collection/ids', service.collectionIds );
   app.get('/zotero/:type/:id/collection/:collection/summary', service.collectionItemsSummary );
+  app.get('/zotero/:type/:id/collection/:collection/items', service.collectionItems );
 
   done(null,this);
 };

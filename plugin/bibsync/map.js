@@ -351,7 +351,7 @@ var fields = {
     RIS: 'ID',
     bibtex: false
   },
-  type: {
+  itemType: {
     label: 'Reference Type',
     RIS: 'TY',
     bibtex: false
@@ -726,11 +726,6 @@ var fields = {
     RIS: false,
     bibtex: false
   },
-  extra: {
-    label: 'Extra',
-    RIS: false,
-    bibtex: false
-  },
   audiofiletype: {
     label: 'File Type',
     RIS: false,
@@ -1045,5 +1040,5 @@ var fields = {
 
 module.exports = {
   types  : types,
-  fields : fields
+  fields : fields,
 };

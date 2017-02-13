@@ -500,20 +500,5 @@ module.exports = {
   fields : {
     toLocal : fields_toLocal,
     toGlobal  : fields_toGlobal
-  },
-  translateName : function( map, field, data ){
-    if (typeof map[field] == "function") {
-      return map[field](data);
-    }
-    if (typeof map[field] == "object" && typeof map[field].translateFieldName == "function") {
-      return map[field].translateFieldName(data);
-    }
-    return map[field];
-  },
-  translateContent : function( map, field, data ){
-    if (typeof map[field] == "object" && typeof map[field].translateContent == "function") {
-      return map[field].translateContent(data);
-    }
-    return data[field];
   }
 };

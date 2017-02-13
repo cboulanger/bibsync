@@ -1038,7 +1038,148 @@ var fields = {
   }
 };
 
-module.exports = {
-  types  : types,
-  fields : fields,
+/**
+ * Module definition
+ * @type {Object}
+ */
+module.exports = function( localDictionary ) {
+
+  return {
+    /**
+     * Return the   label of the (global) field or type
+     * @param  {String} key The global name of the field or type
+     * @return {String|false} returns false if the field or type does not exist
+     */
+    getLabel : function(key)
+    {
+      return (types[key] && types[key].label) || ( fields[key] && fields[key].label );
+    },
+
+    /**
+     * Return the RIS tag of the (global) field name
+     * @param  {String} key The global name of the field or type
+     * @return {String|false} returns false if the field or type does not exist
+     */
+    getRIS : function(key)
+    {
+      return fields[key] && fields[key].RIS;
+    },
+
+    /**
+     * Given a dictionary, field name and reference data, return the name of the
+     * field in the dictionary
+     * @param  {map} dictionary The dictionary
+     * @param  {String} field      The name of the field to be translated
+     * @param  {Map} data       Reference data
+     * @return {String}      The translated field/type name
+     */
+    translateName: function(dictionary, field, data) {
+      if (typeof dictionary[field] == "function") {
+        return dictionary[field](data);
+      }
+      if (typeof dictionary[field] == "object" && typeof dictionary[field].translateFieldName == "function") {
+        return dictionary[field].translateFieldName(data);
+      }
+      return dictionary[field];
+    },
+
+    /**
+     * Given a dictionary, field name and reference data, translate the field content
+     * @param  {Map} dictionary The dictionary
+     * @param  {String} field The name of the field/type
+     * @param  {Map} data The reference data
+     * @return {String|Map} If String, the translated content of the field. If map,
+     * the keys and values of several fields.
+     */
+    translateContent: function(dictionary, field, data) {
+      if (typeof dictionary[field] == "object" && typeof dictionary[field].translateContent == "function") {
+        return dictionary[field].translateContent(data);
+      }
+      return data[field];
+    },
+
+    /**
+     * Given a global type name, return the local type name
+     * @param  {String} globaType The name of the global type
+     * @param  {Map} data The reference data
+     * @return {String} The translated type
+     */
+    getLocalType: function(globaType, data) {
+      return this.translateName(localDictionary.types.toLocal, globaType, data);
+    },
+
+    /**
+     * Given a local type name, return the global type name
+     * @param  {String} localType The name of the local type
+     * @param  {Map} data The reference data
+     * @return {String} The translated type
+     */
+    getGlobalType: function(localField, data) {
+      return this.translateName(localDictionary.fields.toGlobal, localField, data);
+    },
+
+    /**
+     * Test if given field name is a local field
+     * @param  {String} fieldName The name of the field
+     * @return {Boolean} Returns true if argument is a local field name, false if not
+     */
+    isLocalField: function(fieldName) {
+      return localDictionary.fields.toGlobal[fieldName] !== undefined;
+    },
+
+    /**
+     * Given a global field name, return the local field name
+     * @param  {String} globalField The name of the global field
+     * @param  {Map} data        The reference data
+     * @return {String} The translated field name
+     */
+    getLocalField: function(globalField, data) {
+      return this.translateName(localDictionary.fields.toLocal, globalField, data);
+    },
+
+    /**
+     * Test if given field name is a global field
+     * @param  {String} fieldName The name of the field
+     * @return {Boolean} Returns true if argument is a global field name, false if not
+     */
+    isGlobalField: function(fieldName) {
+      return fields[fieldName] !== undefined;
+    },
+
+    /**
+     * Given a local field name, return the global field name
+     * @param  {String} localField The name of the local field
+     * @param  {Map} data        The reference data
+     * @return {String} The translated field name
+     * TODO
+     */
+    getGlobalField: function(localField, data) {
+      return this.translateName(localDictionary.fields.toGlobal, localField, data);
+    },
+
+    /**
+     * Given a local field content, return the global field content
+     * @param  {String} localField The name of the global field
+     * @param  {Map} data        The reference data
+     * @return {String|Map} If String, the content of the given local field. If
+     *                      Map, the keys and values of several local fields
+     */
+    getGlobalContent: function(localField, data) {
+      //console.log("localField:"+localField);
+      //console.dir (data );
+      return this.translateContent(localDictionary.fields.toGlobal, localField, data);
+    },
+
+    /**
+     * Given a global field content, return the local field content
+     * @param  {String} localField The name of the local field
+     * @param  {Map} data        The reference data
+     * @return {String|Map} If String, the content of the given local field. If
+     *                      Map, the keys and values of several local fields‚
+     * TODO
+     */
+    getLocalContent: function(globalField, data) {
+      return this.translateContent(localDictionary.fields.toLocal, globalField, data);
+    }
+  }
 };

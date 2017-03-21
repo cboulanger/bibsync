@@ -1,3 +1,5 @@
+var _ = require("underscore");
+
 /**
  * Reference Types
  * @type {Object}
@@ -1068,9 +1070,9 @@ module.exports = function( localDictionary ) {
     /**
      * Given a dictionary, field name and reference data, return the name of the
      * field in the dictionary
-     * @param  {map} dictionary The dictionary
+     * @param  {Object} dictionary The dictionary
      * @param  {String} field      The name of the field to be translated
-     * @param  {Map} data       Reference data
+     * @param  {Object} data       Reference data
      * @return {String}      The translated field/type name
      */
     translateName: function(dictionary, field, data) {
@@ -1085,9 +1087,9 @@ module.exports = function( localDictionary ) {
 
     /**
      * Given a dictionary, field name and reference data, translate the field content
-     * @param  {Map} dictionary The dictionary
+     * @param  {Object} dictionary The dictionary
      * @param  {String} field The name of the field/type
-     * @param  {Map} data The reference data
+     * @param  {Object} data The reference data
      * @return {String|Map} If String, the translated content of the field. If map,
      * the keys and values of several fields.
      */
@@ -1098,10 +1100,11 @@ module.exports = function( localDictionary ) {
       return data[field];
     },
 
+
     /**
      * Given a global type name, return the local type name
      * @param  {String} globaType The name of the global type
-     * @param  {Map} data The reference data
+     * @param  {Object} data The reference data
      * @return {String} The translated type
      */
     getLocalType: function(globaType, data) {
@@ -1111,7 +1114,7 @@ module.exports = function( localDictionary ) {
     /**
      * Given a local type name, return the global type name
      * @param  {String} localType The name of the local type
-     * @param  {Map} data The reference data
+     * @param  {Object} data The reference data
      * @return {String} The translated type
      */
     getGlobalType: function(localField, data) {
@@ -1130,7 +1133,7 @@ module.exports = function( localDictionary ) {
     /**
      * Given a global field name, return the local field name
      * @param  {String} globalField The name of the global field
-     * @param  {Map} data        The reference data
+     * @param  {Object} data        The reference data
      * @return {String} The translated field name
      */
     getLocalField: function(globalField, data) {
@@ -1149,7 +1152,7 @@ module.exports = function( localDictionary ) {
     /**
      * Given a local field name, return the global field name
      * @param  {String} localField The name of the local field
-     * @param  {Map} data        The reference data
+     * @param  {Object} data        The reference data
      * @return {String} The translated field name
      * TODO
      */
@@ -1160,9 +1163,9 @@ module.exports = function( localDictionary ) {
     /**
      * Given a local field content, return the global field content
      * @param  {String} localField The name of the global field
-     * @param  {Map} data        The reference data
-     * @return {String|Map} If String, the content of the given local field. If
-     *                      Map, the keys and values of several local fields
+     * @param  {Object} data        The reference data
+     * @return {String|Object} If String, the content of the given local field. If
+     *                      Object, the keys and values of several local fields
      */
     getGlobalContent: function(localField, data) {
       //console.log("localField:"+localField);
@@ -1173,13 +1176,98 @@ module.exports = function( localDictionary ) {
     /**
      * Given a global field content, return the local field content
      * @param  {String} localField The name of the local field
-     * @param  {Map} data        The reference data
-     * @return {String|Map} If String, the content of the given local field. If
-     *                      Map, the keys and values of several local fields‚
+     * @param  {Object} data        The reference data
+     * @return {String|Object} If String, the content of the given local field. If
+     *                      Object, the keys and values of several local fields‚
      * TODO
      */
     getLocalContent: function(globalField, data) {
       return this.translateContent(localDictionary.fields.toLocal, globalField, data);
+    },
+
+    /**
+     * Translate an local item to a global one
+     * @param  {Object} item       The local item object
+     * @return {Object}            The translated object
+     */
+    translateToGlobal : function( item )
+    {
+      var translatedItem = {};
+      for( var key in item )
+      {
+        var translatedKey = this.getGlobalField( key, item );
+        if( translatedKey === undefined ) continue; // skip if field name cannot be translated
+        var translatedValue = this.getGlobalContent( key, item );
+        if ( _.isObject( translatedValue) ){
+          _.keys(translatedValue).forEach(function(key2){
+            translatedItem[key2] =
+              this._translateToGlobalHelper(translatedKey,translatedValue[key2],translatedItem);
+          },this);
+        } else {
+          translatedItem[translatedKey] =
+            this._translateToGlobalHelper(translatedKey,translatedValue,translatedItem);
+        }
+      }
+      return translatedItem;
+    },
+
+    /**
+     * Helper function to set values to the target on properties that might
+     * already contain a value. The aim is to add array items or strings instead
+     * of overwriting them.
+     * @param  {String} translatedKey   The translated key
+     * @param  {Array|String} translatedValue The translated content
+     * @param  {Object} translatedItem  The item on which key/value are set
+     * @return {Array|String} The result value to be set
+     */
+    _translateToGlobalHelper : function(translatedKey,translatedValue,translatedItem){
+      var content = translatedItem[translatedKey];
+      if ( content !== undefined || ! _.isString( translatedValue ) )
+      {
+        if ( _.isArray( translatedValue ) ){
+          result= (content||"") + translatedValue.join("; ");
+        } else if ( _.isString( translatedValue ) ) {
+          result = (content||"") + "; " + translatedValue;
+        } else {
+          console.warn("Type mismatch in field " + translatedKey);
+          result = false;
+        }
+      } else {
+        result = translatedValue;
+      }
+      return result;
+    },
+
+    /**
+     * Translate an global item to a local one
+     * @param  {Object} item       The global item object
+     * @return {Object}            The translated object
+     */
+    translateToLocal : function( item )
+    {
+      var translatedItem = {};
+      for( var key in item )
+      {
+        var translatedKey = this.getLocalField( key, item );
+        if( ! translatedKey ) continue; // skip if field name cannot be translated
+        var translatedValue = this.getLocalContent( key, item );
+        var content = translatedItem[translatedKey];
+        if ( content !== undefined )
+        {
+          if ( _.isArray( content ) && _.isArray( translatedValue ) ){
+            translatedItem[translatedKey] = content.concat( translatedValue );
+          } else if ( _.isString( content ) && _isString( translatedValue ) ) {
+            translatedItem[translatedKey] = content + "; " + translatedValue;
+          } else if ( _.isObject( content ) && _.isObject( translatedValue ) ) {
+            translatedItem[translatedKey] = _.extend( content, translatedValue );
+          } else {
+            console.warn("Type mismatch in field " + key);
+          }
+        } else {
+            translatedItem[translatedKey] = translatedValue;
+        }
+      }
+      return translatedItem;
     }
-  }
+  };
 };

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <form xmlns="http://www.qookery.org/ns/Form"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../../../../../lib/qookery/qookery/docs/form.xsd"
   column-count="2" column-flexes="1 1" row-flexes="0 9 0 0" margin="10">
 
     <import class="qookery.contexts.Qookery"/>
@@ -67,38 +69,4 @@
             </script>
         </button>
     </composite>
-
-    <!-- window to resolve sync conflicts -->
-
-    <form display="none" id="editor" column-count="2" column-flexes="1 1" row-flexes="0 1 0" title="Compare window">
-
-
-
-        <table id="leftDetails" label="%none" height="500" width="300">
-            <table-model class="qookery.impl.DefaultTableModel"/>
-            <table-column connect="field" label="Field" width="S"/>
-            <table-column connect="value" label="Value" width="1*"/>
-        </table>
-
-        <table id="rightDetails" label="%none" height="500" width="300">
-            <table-model class="qookery.impl.DefaultTableModel"/>
-            <table-column connect="field" label="Field" width="S"/>
-            <table-column connect="value" label="Value" width="1*"/>
-        </table>
-
-        <composite column-count="auto" align-x="center" max-width="300" column-flexes="1 1" col-span="2">
-            <button label="OK">
-                <script event="execute">
-                    $.form.close($.form.getModel());
-                </script>
-            </button>
-            <button label="Cancel">
-                <script event="execute">
-                    $.form.close(null);
-                </script>
-            </button>
-        </composite>
-
-    </form>
-
 </form>

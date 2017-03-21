@@ -8,6 +8,9 @@ module.exports =
   /**
    * Return the data of available libraries
    * /zotero/libraries
+   * @param  {Object} req Express request Object
+   * @param  {Object} res Express response Object
+   * @return {void}
    */
   libraries : function(req, res) {
     api.getLibraries()
@@ -23,6 +26,9 @@ module.exports =
   /**
    * Return the data of all collections in a flat structure
    * /bookends/:type/:id/collections/flat
+   * @param  {Object} req Express request Object
+   * @param  {Object} res Express response Object
+   * @return {void}
    */
   collectionsFlat : function(req, res) {
     api.getCollections()
@@ -38,6 +44,9 @@ module.exports =
   /**
    * Return the data of all collections in a tree structure
    * /bookends/:type/:id/collections/tree
+   * @param  {Object} req Express request Object
+   * @param  {Object} res Express response Object
+   * @return {void}
    */
   collectionsTree : function(req, res) {
 
@@ -81,7 +90,10 @@ module.exports =
 
   /**
    * Returns the ids of the references in a collection
-   * /bookends/collection/:collection/ids
+   * /bookends/collections/:collection/ids
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   collectionIds : function(req,res)
   {
@@ -97,7 +109,10 @@ module.exports =
 
   /**
    * Returns the summary of the reference data in a collection (author,title,year)
-   * /bookends/:type/:libId/collection/:collection/summary
+   * /bookends/:type/:libId/collections/:collection/summary
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   collectionItemsSummary : function(req,res)
   {
@@ -114,7 +129,10 @@ module.exports =
 
   /**
    * Returns the data of the references in a collection
-   * /bookends/:type/:libId/collection/:collection/items
+   * /bookends/:type/:libId/collections/:collection/items
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   collectionItems : function(req,res)
   {
@@ -129,9 +147,15 @@ module.exports =
       });
   },
 
+
+// ============================
+
   /**
-   * /format/:ids
    * Returns an array of references formatted in the given style
+   * /format/:ids
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   formatReferences : function(req,res)
   {
@@ -149,10 +173,13 @@ module.exports =
 
 
   /**
-   * /reference/:ids
    * Returns the data of the given reference as normalized data
+   * /bookends/:type/:id/items/:ids
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
-  reference : function(req,res)
+  items : function(req,res)
   {
     var ids = req.params.ids.split(/,/);
     api.getReferenceData(ids)
@@ -165,8 +192,11 @@ module.exports =
   },
 
   /**
-   * /moddates/:ids
    * Returns the data of the given reference as CSL input data
+   * /moddates/:ids
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   moddates : function(req,res)
   {
@@ -180,8 +210,12 @@ module.exports =
   },
 
   /**
-   * /get/:ids/:field
    * Returns the data of the given reference as CSL input data
+   * /get/:ids/:field
+   *
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
    */
   get : function(req,res)
   {

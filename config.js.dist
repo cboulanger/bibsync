@@ -2,9 +2,13 @@ module.exports = {
   zotero : {
     enabled : true,
     apiKey : "",
-    userId : 0
+    userId : 0,
+    webdavUrl : "",
+    webdavUser : "",
+    webdavPassword : ""
   },
   bookends : {
-    enabled : false
+    enabled : false,
+    attachmentPath : ""
   }
 };

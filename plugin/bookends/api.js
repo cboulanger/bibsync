@@ -1,23 +1,18 @@
 // Uses code by ComplexPoint on https://www.sonnysoftware.com/phpBB3/viewtopic.php?f=2&t=4017
 
-var osascript = require('node-osascript');
-var Promise   = require('promise');
-var md5       = require('md5');
-var _         = require("underscore");
+var osascript  = require('node-osascript');
+var Promise    = require('promise');
+var md5        = require('md5');
+var _          = require("underscore");
 
-// setup mappings:
-var global_map    = require('../bibsync/map');
-var global_types  = global_map.types;
-var global_fields = global_map.fields;
-var local_map     = require('./map');
-var local_types   = local_map.types.toGlobal;
-var local_fields  = local_map.fields.toGlobal; // TODO
-
+var dictionary = require('../bibsync/dictionary')(require('./dictionary'));
+var db         = require('../bibsync/db').db;
 
 /**
  * Given an event code, return the AppleScript command
  * @param  {String} eventCode
  * @return {String}
+ * TODO : move into module
  */
 function eventCode(eventCode) {
   return 'tell application "Bookends" to «event ToyS' + eventCode + '»';
@@ -31,6 +26,7 @@ function eventCode(eventCode) {
  *    If false, split by "\r" and re-join with "\n"
  *    If undefined, split with "\r"
  * @return {String}
+ * TODO : move into module
  */
 function evalOSA(OSACommand, splitChar, transformFunc) {
   return new Promise(function(resolve, reject) {
@@ -75,63 +71,6 @@ module.exports = {
   Sync API
   -------------------------------------------------------------------------
   */
-
-  /**
-   * Given a global field name, return the local field name
-   * @param  {String} globalField The name of the global field
-   * @param  {Map} data        The reference data
-   * @return {String}
-   * TODO
-   */
-  getLocalField: function(globalField, data) {
-    return local_map.translateName(local_map.fields.toLocal, globalField, data);
-  },
-
-  /**
-   * Given a local field name, return the global field name
-   * @param  {String} localField The name of the local field
-   * @param  {Map} data        The reference data
-   * @return {String}
-   * TODO
-   */
-  getGlobalField: function(localField, data) {
-    return local_map.translateName(local_map.fields.toGlobal, localField, data);
-  },
-
-  /**
-   * Given a local field content, return the global field content
-   * @param  {String} localField The name of the global field
-   * @param  {Map} data        The reference data
-   * @return {String|Map} If String, the content of the given local field. If
-   *                      Map, the keys and values of several local fields
-   * TODO
-   */
-  getGlobalContent: function(localField, data) {
-    //console.log("localField:"+localField);
-    //console.dir (data );
-    return local_map.translateContent(local_map.fields.toGlobal, localField, data);
-  },
-
-  /**
-   * Given a global field content, return the local field content
-   * @param  {String} localField The name of the local field
-   * @param  {Map} data        The reference data
-   * @return {String|Map} If String, the content of the given local field. If
-   *                      Map, the keys and values of several local fields‚
-   * TODO
-   */
-  getLocalContent: function(globalField, data) {
-    return local_map.translateContent(local_map.fields.toLocal, globalField, data);
-  },
-
-
-  /**
-   * Return the field name that is used to store a unique id that is used for synchronization
-   * @return {String}
-   */
-  getSyncIdField : function(){
-    return "user20";
-  },
 
 
   /**
@@ -316,45 +255,50 @@ module.exports = {
           that.getReferenceData(ids)
             .then(function(result){
               result = result.map(function(item){
-                //console.log("=======================================================");
-                //console.dir( item );
-                //console.log("=======================================================");
+                // console.log("=======================================================");
+                // console.dir( item );
+                // console.log("=======================================================");
 
-                var globalItem = {};
-
-                for ( var key in item )
+                var globalItem = _.omit( dictionary.translateToGlobal( item ), function(value){
+                  return !value;
+                });
+                if ( _.isArray(fields) && fields.length ){
+                  globalItem = _.pick( globalItem, fields );
+                }
+                // add type if missing
+                if ( ! globalItem.itemType )
                 {
-                  if ( fields instanceof Array && fields.indexOf(key) ===-1 ) continue;
+                  globalItem.itemType = dictionary.getGlobalContent( "itemType", item );
+                }
 
-                  var globalField = that.getGlobalField(key,  item);
-                  if ( globalField ){
-                    var content = that.getGlobalContent(key, item);
-                    if( content) globalItem[globalField] = content;
+                // add version
+                globalItem.version = item.version || 0;
+
+                // add special fields if requested
+                if( _.isArray(fields) ) {
+                  if ( fields.indexOf("creatorSummary") !== -1 )
+                  {
+                    globalItem.creatorSummary = item.authors || item.editors;
+                  }
+                  // add year if requested
+                  if( fields.indexOf("year") !== -1 )
+                  {
+                    globalItem.year = item.date;
                   }
                 }
-                // add special fields
-                if ( fields instanceof Array) {
-                  if( fields.indexOf("creatorSummary") !== -1 )
-                    globalItem.creatorSummary = item.authors || item.editors;
-                  if( fields.indexOf("year") !== -1 )
-                    globalItem.year = item.date;
-                }
-
-
-                // add a unique id for synchronization
-                globalItem.syncId = "bookends#" + item.id;
-
-
                 return globalItem;
 
               }).sort(function(a,b){
-                return ( a.creatorSummary < b.creatorSummary ) ? -1 : ( a.creatorSummary == b.creatorSummary ) ? 0 : 1 ;
+                var key =  a.creatorSummary ? "creatorSummary" : "authors";
+                return ( a[key] < b[key] ) ? -1 : ( a[key] == b[key] ) ? 0 : 1;
               });
               resolve(result);
             }).catch(reject);
         }).catch(reject);
     });
   },
+
+
 
   /**
    * Returns the dates when the references with the given ids were last modified
@@ -366,19 +310,44 @@ module.exports = {
     var args = ' "' + ids.join(',') + '"';
     return new Promise(function(resolve, reject) {
       evalOSA(eventCode('RMOD') + args, String.fromCharCode(0))
-        .then(function(result) {
-          resolve(result.map(function(s) {
-            return new Date(
-              // Need Unix (1970) milliseconds (not 1904 seconds) for JS:
-              // (drop 66 years of seconds, and convert to milliseconds)
-              (parseInt(s, 10) - 2.0828448E+9) * 1000
-            );
-          }));
-        })
-        .catch(reject);
-      });
-    },
+      .then(function(result) {
+        resolve(result.map(function(s) {
+          return new Date(
+            // Need Unix (1970) milliseconds (not 1904 seconds) for JS:
+            // (drop 66 years of seconds, and convert to milliseconds)
+            (parseInt(s, 10) - 2.0828448E+9) * 1000
+          );
+        }));
+      })
+      .catch(reject);
+    });
+  },
 
+
+  /**
+   * Given one or more ids and a field name, return the local content of the field(s)
+   * of the reference(s) having this/these id(s).
+   * @param  {Array} ids       An array with one or more ids
+   * @param  {String} fieldName The name of the field
+   * @return {Promise}  A promise resovling with an array containing
+   * the field contents.
+   */
+  getLocalFieldContent: function(ids, fieldName) {
+    if( ! (ids instanceof Array && ids.length) ) {
+      throw new Error("ids must be array with at least one element");
+    }
+    switch (fieldName) {
+      case "date": fieldName = "thedate"; break;
+      case "type": fieldName = "[type]"; break;
+      case "pages": fieldName = "[pages]"; break;
+      case undefined:
+      case "":
+      case null:
+        throw new Error("Field name must be a string");
+    }
+    var cmd = ' "' + ids.join(',') + '"' + ' given string:' + '"' + fieldName + '"';
+    return evalOSA(eventCode('RFLD') + cmd, String.fromCharCode(0));
+  },
 
 
   /*
@@ -493,7 +462,7 @@ module.exports = {
             taggedData.split(/\r/).map(function(line) {
               var i = line.indexOf(":");
               var maybeFieldName = line.substring(0, i);
-              if ( local_map.fields.toGlobal[maybeFieldName] !== undefined) {
+              if ( dictionary.isLocalField(maybeFieldName) ) {
                 fieldName = maybeFieldName;
                 dict[fieldName] = line.substring(i + 2);
               } else if (fieldName && maybeFieldName === undefined) {
@@ -542,19 +511,7 @@ module.exports = {
   },
 
 
-  // fieldContents [String] -> maybe String -> String
-  // authors, title, editors, journal, volume, pages, thedate,
-  // publisher, location, url, title2, abstract, notes, user1...user20
-  get: function(ids, maybeFieldName) {
-    if (maybeFieldName && fields[maybeFieldName]) {
-      maybeFieldName = fields[maybeFieldName].bookendsDbCol;
-    }
-    var idsStr = ' "' + (ids instanceof Array ? ids : [ids]).join(',');
-    var fieldNameStr = '"' + (maybeFieldName ? (' given string:' + '"' + maybeFieldName + '"') : '');
-    return evalOSA(eventCode('RFLD') + idsStr + fieldNameStr, String.fromCharCode(0), true, function(value) {
-      return (fieldNameStr == "[type]") ? local_types[value] : value;
-    });
-  },
+
 
   // fieldWrite :: String -> String -> String -> ()
   // authors, title, editors, journal, volume, pages, thedate,

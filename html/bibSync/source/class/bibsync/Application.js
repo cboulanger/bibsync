@@ -41,6 +41,7 @@ qx.Class.define("bibsync.Application", {
      */
     setupUI: function() {
       // render main layout
+      // todo - use loadForm() instead?
       qookery.contexts.Qookery.loadResource("bibsync/forms/application.xml", this, function(xmlSource) {
         var xmlDocument = qx.xml.Document.fromString(xmlSource);
         var parser = qookery.Qookery.createFormParser();
@@ -84,16 +85,31 @@ qx.Class.define("bibsync.Application", {
           },
           getTableData: {
             method: "GET",
-            url: "/{application}/{type}/{id}/collection/{collectionKey}/summary"
+            url: "/{application}/{type}/{id}/collections/{collectionKey}/summary"
           },
           sync : {
             method: "GET",
             url: "/sync/{sourceApplication}/{sourceType}/{sourceId}/{sourceCollectionKey}" +
                  "/to/{targetApplication}/{targetType}/{targetId}/{targetCollectionKey}/{action}"
-          }
+          },
+          removeCollectionItem : {
+            method: "DELETE",
+            url: "/{application}/{type}/{id}/collections/{collectionKey}/items/{itemId}"
+          },
+          createItem : {
+            method: "POST",
+            url: "/{application}/{type}/{id}/items"
+          },
+          updateItem : {
+            method: "PUT",
+            url: "/{application}/{type}/{id}/items/{itemId}"
+          },
         });
         resource.addListener("error",function(e){
           qx.core.Init.getApplication().getRoot().setEnabled(true);
+          resource.dispose();
+          delete this.__restResources[name];
+          console.warn(e.getData());
           alert("Server Error");
         },this);
         resource.configureRequest(function(){
@@ -140,6 +156,14 @@ qx.Class.define("bibsync.Application", {
       var controller2 = new qx.data.controller.List(null, rightSelectBox, "name");
       libraryStore.bind("model", controller2, "model");
 
+
+      // to save some clicks during development
+      libraryStore.addListener("changeModel",function(e){
+        leftSelectBox.setModelSelection([e.getData().getItem(0)]);
+        rightSelectBox.setModelSelection([e.getData().getItem(4)]);
+      });
+
+
       // load selectboxes
       this.getRestResource("selectBoxes").getLibraries();
 
@@ -164,7 +188,7 @@ qx.Class.define("bibsync.Application", {
       });
       rightTreeStore.bind("model[0]", rightTree, "model");
 
-      // setup table databinding
+      // setup table databinding in main window
       var leftTableStore = new qx.data.store.Rest(this.getRestResource("leftTable"), "getTableData");
       var leftTableComp = this.getForm().getComponent("leftTable");
       var leftTableModel = leftTableComp.getTableModel();
@@ -257,27 +281,216 @@ qx.Class.define("bibsync.Application", {
       };
       var restResource = this.getRestResource("sync");
       var store = new qx.data.store.Rest(restResource, "sync");
-      store.addListenerOnce("changeModel",function handler(e){
 
+      // reset store on error
+      restResource.addListener("error",function(){
+        store.dispose();
+        store = new qx.data.store.Rest(restResource, "sync");
+      });
+
+      /*
+        handles response from sync api call
+       */
+      var manualSyncResult = [];
+      var that = this;
+      function handler(e){
         var data = e.getData();
         switch( data.getResponseAction() )
         {
           case "alert":
             return alert( data.getResponseData() );
+
           case "error":
             return alert("Error: " + data.getResponseData() );
+
           case "confirm":
-            if ( confirm(e.getData().getResponseData())){
-              params.action = e.getData().getAction();
-              store.addListenerOnce("changeModel",handler);
-              return restResource.sync(params);
+            if ( ! confirm(data.getResponseData()) ) return;
+            params.action = data.getAction();
+            store.addListenerOnce("changeModel",handler);
+            return restResource.sync(params);
+
+          case "startManualSync":
+
+            // check if we have results
+            if ( data.getResponseData().getLength() === 0 )
+            {
+              alert("Nothing to compare: Collections empty or identical.");
+              return;
+            }
+
+            var model = qx.data.marshal.Json.createModel({
+              items : null,
+              index : null,
+              mode : "merge",
+              info : info,
+              action : null
+            }, true);
+
+            model.setItems(data.getResponseData());
+
+            if( ! this.__synopsisComponent )
+            {
+              qookery.contexts.Qookery
+                .loadForm("resource/bibsync/forms/synopsis.xml", that, {
+                  model : model,
+                  success: that.configureSynopis,
+                  fail : function(e){console.error(e)}
+                });
+            } else {
+              that.configureSynopis( this.__synopsisComponent, model );
             }
             return;
         }
-      },this);
-
+      }
+      store.addListenerOnce("changeModel",handler, this);
       restResource.sync(params);
 
+    },
+
+    __synopsisComponent : null,
+
+    /**
+     * Called when the form component has been loaded and parsed
+     * @param  {qookery.IFormComponent}  component The form component
+     * @param  {qx.Object} model  A qooxdoo object
+     * @return {void}
+     */
+    configureSynopis : function(component, model){
+      this.__synopsisComponent = component;
+      model.addListener("changeBubble",function(e){
+        switch( e.getData().name ){
+          case "mode":
+          case "index":
+            this.updateSynopsis();
+            break;
+        }
+      },this);
+      qookery.contexts.Qookery.openWindow(component);
+      component.setModel(model);
+      model.setIndex(0);
+    },
+
+    /**
+     * Reduce a qooxdoo array containing qx objects with a "key" and a "value"
+     * property to a javascript object with key and value pairs
+     * @param  {qx.data.array} item qxArr
+     * @return {Object} The native object
+     */
+    _deKeyValueize : function( qxArr ){
+      var result = {};
+      qxArr.forEach(function(item){
+        result[item.getKey()] = item.getValue();
+      },this);
+      return result;
+    },
+
+    /**
+     * Updates the synopsis window
+     * @return {void}
+     */
+    updateSynopsis : function()
+    {
+      var component = this.__synopsisComponent;
+
+      var index = component.getModel().getIndex();
+      var mode  = component.getModel().getMode();
+      var item  = component.getModel().getItems().getItem(index);
+
+      var sourceItem = item.getItem(0);
+      var targetItem = item.getItem(1);
+      var keys       = item.getItem(2);
+
+      var sourceItemNative = this._deKeyValueize( sourceItem );
+      var targetItemNative = this._deKeyValueize( targetItem );
+      var mergedItemNative = [];
+
+      keys.forEach(function(key){
+        var value;
+        switch(mode){
+          case "source":
+            value = sourceItemNative[key];
+            break;
+          case "target":
+            value = targetItemNative[key];
+            break;
+          case "merge":
+            value = sourceItemNative[key] ? sourceItemNative[key] : targetItemNative[key];
+            break;
+        }
+        if( value !== undefined ) mergedItemNative.push({key:key,value:value});
+      },this);
+
+
+      var mergedItem = qx.data.marshal.Json.createModel(mergedItemNative, true);
+
+      //[sourceItemNative, targetItemNative, mergedItemNative ].forEach(console.dir);
+
+      var action;
+      if ( mergedItem.getLength() === 0 ) {
+        action = "remove";
+      } else if ( targetItem.getLength() === 0 ) {
+        action = "create";
+      } else {
+        action = "update";
+      }
+      component.getModel().setAction(action);
+      component.getComponent("sourceItem").getTableModel().setData(sourceItem);
+      component.getComponent("targetItem").getTableModel().setData(targetItem);
+      component.getComponent("mergedItem").getTableModel().setData(mergedItem);
+    },
+
+    /**
+     * Save merged items
+     * @return {void}
+     */
+    save : function(){
+      console.log("Saving....  ");
+      component = this.__synopsisComponent;
+      var tableModel = component.getComponent("mergedItem").getTableModel();
+      var model  = component.getModel();
+      var action = model.getAction();
+      var info   = model.getInfo();
+      var target = info.getTarget();
+      var rest = this.getRestResource("item");
+
+      var data={};
+      for (var i = 0; i < tableModel.getRowCount(); i++) {
+        var rowData = tableModel.getRowData(i);
+        data[rowData.getKey()] = rowData.getValue();
+      }
+      data.info = qx.util.Serializer.toJson(info);
+
+      switch ( action )
+      {
+        case "remove":
+          if ( confirm("Remove item from collection?") ){
+            rest.removeCollectionItem( {
+              application : target.getApplication(),
+              type : target.getType(),
+              collectionKey : target.getCollectionKey(),
+              itemId: data.id
+            } );
+          }
+          break;
+
+         case "create":
+         if ( confirm("Create new item in collection?") ){
+           rest.invoke("createItem",{
+             application : target.getApplication(),
+             type : target.getType(),
+             id : target.getId(),
+           },data);
+         }
+         break;
+
+         case "update":
+         rest.invoke("updateItem",{
+           application : target.getApplication(),
+           type : target.getType(),
+           id : target.getId(),
+         },data);
+         break;
+      }
     }
   }
 });

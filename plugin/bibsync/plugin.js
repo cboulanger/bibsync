@@ -5,13 +5,17 @@ module.exports = function bibsync(done) {
   console.log('BibSync appplication');
 
   // express with socket.io
-  var express = require('express');
-  var app     = express();
-  var server  = require('http').Server(app);
-  var io      = require('socket.io')(server);
+  var express    = require('express');
+  var app        = express();
+  var server     = require('http').Server(app);
+  var io         = require('socket.io')(server);
+  var bodyParser = require("body-parser");
 
   // static html files
   app.use(express.static('html/bibSync'));
+  app.use(bodyParser.urlencoded({ extended: false }));
+  app.use(bodyParser.json());
+
   app.use(express.static('.')); // only for development!
 
   // sync API

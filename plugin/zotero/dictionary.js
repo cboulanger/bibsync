@@ -95,20 +95,20 @@ var fields_toLocal =
   key: 'extra',
   accessDate: 'accessDate',
   abstract: 'abstractNote',
+  attachments : "attachments",
   authors: {
     translateFieldName   : function(data) {
       return 'creators';
     },
     translateContent : function(data){
-      creatorsMap = {};
+      creatorsMap = [];
       data.authors.split(/;/).map(function(elem){
         if( _.contains(elem,",") ){
-          elem.split(/,/).map(function (part) {
-            creatorsMap.push({
-              creatorType : "author",
-              lastName    : part[0].trim(),
-              firstName   : part[1].trim()
-            });
+          part = elem.split(/,/);
+          creatorsMap.push({
+            creatorType : "author",
+            lastName    : part[0].trim(),
+            firstName   : part[1].trim()
           });
         } else {
           creatorsMap.push({
@@ -117,6 +117,7 @@ var fields_toLocal =
           });
         }
       });
+      return creatorsMap;
     }
   },
   authorTranslated: 'authorTranslated',
@@ -136,30 +137,30 @@ var fields_toLocal =
       return 'creators';
     },
     translateContent : function(data){
-      creatorsMap = {};
-      data.authors.split(/;/).map(function(elem){
+      creatorsMap = [];
+      data.editors.split(/;/).map(function(elem){
         if( _.contains(elem,",") ){
-          elem.split(/,/).map(function (part) {
-            creatorsMap.push({
-              creatorType : "editor",
-              lastName    : part[0].trim(),
-              firstName   : part[1].trim()
-            });
+          part = elem.split(/,/);
+          creatorsMap.push({
+            creatorType : "editor",
+            lastName    : part[0].trim(),
+            firstName   : part[1].trim()
           });
         } else {
           creatorsMap.push({
-            creatorType : "author",
+            creatorType : "editor",
             name        : elem.trim()
           });
         }
       });
+      return creatorsMap;
     }
   },
   issue: 'issue',
   isbn: 'ISBN',
   issn: 'ISSN',
   institution: 'institution',
-  journal: 'journal',
+  journal: 'publicationTitle',
   keywords: {
     translateFieldName   : function(data) {
       return "tags";
@@ -348,11 +349,7 @@ var fields_toGlobal =
   accessDate: 'accessDate',
   abstractNote: 'abstractNote',
   creators: {
-    translateFieldName   : function(data) {
-      return ( data.creators.some(function(item){
-        return item.creatorType == "editor";
-      }) ) ? "editors" : "authors";
-    },
+    translateFieldName   : function() {return false;}, // field name depends on content
     translateContent : function(data){
       var field, content={};
       data.creators.map(function(elem) {
@@ -366,13 +363,14 @@ var fields_toGlobal =
       return content;
     }
   },
+  creatorSummary: 'creatorSummary',
   tags: {
     translateFieldName   : function(data) {
       return "keywords";
     },
     translateContent : function(data){
       var content = data.tags.reduce(function(result, elem){
-        return result + "; " + elem.tag;
+        return (result ? result + "; " :"") + elem.tag;
       },"");
       return content;
     }
@@ -392,7 +390,7 @@ var fields_toGlobal =
   ISBN: 'isbn',
   ISSN: 'issn',
   institution: 'institution',
-  journal: 'journal',
+  publicationTitle: 'journal',
   keywords: 'keywords',
   language: 'language',
   place: 'place',
@@ -462,7 +460,6 @@ var fields_toGlobal =
   proceedingsTitle: 'proceedingsTitle',
   programTitle: 'programTitle',
   publicLawNumber: 'publicLawNumber',
-  publicationTitle: 'publicationTitle',
   references: 'references',
   reportType: 'reportType',
   reporter: 'reporter',

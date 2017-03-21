@@ -237,7 +237,7 @@ var fields_toLocal =
   custom4: 'user15',
   custom5: 'user16',
   custom6: 'user19',
-  custom7: 'user20'
+  version: 'user20'
 };
 
 /**
@@ -245,7 +245,7 @@ var fields_toLocal =
  */
 var types_toGlobal = {
   'Audiovisual material': 'video',
-  'Journal article': 'journalArticle#',
+  'Journal article': 'journalArticle',
   Artwork: 'artwork',
   Internet: 'webpage',
   Book: 'book',
@@ -268,24 +268,24 @@ var types_toGlobal = {
 /**
  * Map local to global fields
  */
-var fields_toGlobal =
-{ id: 'id',
+var fields_toGlobal ={
+  id: 'id',
   type: {
-  translateFieldName : function(data) {
-    return 'itemType';
-  },
-  translateContent : function(data)
-  {
-    var globalType = types_toGlobal[data.type];
-    if( typeof globalType == "function" ){
-      globalType = globalType(data);
+    translateFieldName : function(data) {
+      return 'itemType';
+    },
+    translateContent : function(data)
+    {
+      var globalType = types_toGlobal[data.type];
+      if( typeof globalType == "function" ){
+        globalType = globalType(data);
+      }
+      //console.log("Type:" + data.itemType + " -> " + localType);
+      return globalType || "journalArticle";
     }
-    //console.log("Type:" + data.itemType + " -> " + localType);
-    return globalType || "journalArticle";
-  }
-},
+  },
   user1: 'key',
-  user20: 'syncId',
+  user20: 'version',
   abstract: 'abstract',
   authors: {
     translateFieldName : function(data) {
@@ -307,15 +307,22 @@ var fields_toGlobal =
     }
   },
   attachments: 'attachments',
-  journal: 'websiteTitle',
-  groups: 'collections',
+  journal: 'journal',
+  groups: {
+    translateFieldName : function(data) {
+      return 'collections';
+    },
+    translateContent : function(data)
+    {
+      return data.groups.split(/, /).join(";");
+    }
+  },
   user5: 'callNumber',
   date: 'date',
   added: 'dateAdded',
   user17: 'doi',
   user2: 'edition',
-  editors: 'editors',
-  issue: 'reportNumber',
+  issue: 'issue',
   user6: function(item){
     switch (item.type) {
       case "journal":
@@ -325,7 +332,7 @@ var fields_toGlobal =
         return "isbn";
       }
   },
-  publisher: 'university',
+  publisher: 'publisher',
   keywords: 'keywords',
   user7: 'language',
   location: 'place',
@@ -340,7 +347,7 @@ var fields_toGlobal =
   user10: 'titleTranslated',
   user3: 'translator',
   url: 'url',
-  user4: 'custom1',
+  //user4: 'custom1',
   user8: 'custom2',
   user14: 'custom3',
   user15: 'custom4',

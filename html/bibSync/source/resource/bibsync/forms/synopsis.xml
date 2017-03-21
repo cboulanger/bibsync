@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form xmlns="http://www.qookery.org/ns/Form"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="../../../../../../lib/qookery/qookery/docs/form.xsd"
+  id="synopsis"
+  column-count="3" column-flexes="1 1 1"
+  row-count="3" row-flexes="0 1 0"
+  title="Manual Synchronization">
+
+    <script event="appear">
+      // appeared
+    </script>
+
+
+    <import class="qookery.contexts.Qookery"/>
+
+    <label label="Source" font="bold" align-x="center" />
+    <label label="Target" font="bold" align-x="center" />
+    <label id="mergedLabel" label="Merged" font="bold" align-x="center">
+      <script>
+        $.form.bind("model.action",this, "value",{
+          converter : function(value){ switch(value){
+            case "remove" : return "Item will be removed"; break;
+            case "create" : return "Item will be created"; break;
+            default : return "Item will be updated";
+          } }
+        });
+      </script>
+    </label>
+
+    <table id="sourceItem" height="500" width="300" label="%none" >
+        <table-model class="qookery.impl.DefaultTableModel"/>
+        <table-column connect="key" label="Field" width="S"/>
+        <table-column connect="value" label="Value" width="1*" editable="true" />
+    </table>
+
+    <table id="targetItem" height="500" width="300" label="%none" >
+        <table-model class="qookery.impl.DefaultTableModel"/>
+        <table-column connect="key" label="Field" width="S"/>
+        <table-column connect="value" label="Value" width="1*" editable="true" />
+    </table>
+
+    <table id="mergedItem" height="500" width="300" label="%none" >
+        <table-model class="qookery.impl.DefaultTableModel"/>
+        <table-column connect="key" label="Field" width="S"/>
+        <table-column connect="value" label="Value" width="1*" editable="true" />
+    </table>
+
+    <composite column-count="auto" align-x="center" max-width="600" column-flexes="1 1 1 1 1" col-span="3">
+
+        <!--merge mode -->
+        <radio-button-group connect="mode">
+          <radio-button label="Source" model="source" />
+          <radio-button label="Target" model="target" />
+          <radio-button label="Merge"  model="merge" />
+        </radio-button-group>
+
+        <button label="Prev.">
+            <script event="execute">
+              var model = $.form.getModel();
+              var index = model.getIndex();
+              model.setIndex( index &gt; 0 ? index -1 : 0 );
+            </script>
+        </button>
+
+        <button label="Next">
+            <script event="execute">
+              var model = $.form.getModel();
+              var index = model.getIndex();
+              model.setIndex( index &lt; model.getItems().length - 1 ? index + 1 : index );
+            </script>
+        </button>
+
+        <button label="Cancel">
+            <script event="execute">
+                $.form.close(null);
+            </script>
+        </button>
+
+        <button label="Save">
+            <script event="execute">
+                $.Qookery.getService("app").save();
+            </script>
+        </button>
+    </composite>
+</form>

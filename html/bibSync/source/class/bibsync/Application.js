@@ -92,17 +92,26 @@ qx.Class.define("bibsync.Application", {
             url: "/sync/{sourceApplication}/{sourceType}/{sourceId}/{sourceCollectionKey}" +
                  "/to/{targetApplication}/{targetType}/{targetId}/{targetCollectionKey}/{action}"
           },
+          copy : {
+            method: "GET",
+            url: "/copy/{sourceApplication}/{sourceType}/{sourceId}/{sourceCollectionKey}" +
+                 "/to/{targetApplication}/{targetType}/{targetId}/{targetCollectionKey}"
+          },
           removeCollectionItem : {
             method: "DELETE",
-            url: "/{application}/{type}/{id}/collections/{collectionKey}/items/{itemId}"
+            url: "/{application}/{type}/{id}/collections/{collectionKey}/items"
+          },
+          copyItem : {
+            method: "PUT",
+            url: "/{application}/{type}/{id}/items"
           },
           createItem : {
             method: "POST",
             url: "/{application}/{type}/{id}/items"
           },
           updateItem : {
-            method: "PUT",
-            url: "/{application}/{type}/{id}/items/{itemId}"
+            method: "PATCH",
+            url: "/{application}/{type}/{id}/items"
           },
         });
         resource.addListener("error",function(e){
@@ -110,7 +119,7 @@ qx.Class.define("bibsync.Application", {
           resource.dispose();
           delete this.__restResources[name];
           console.warn(e.getData());
-          alert("Server Error");
+          alert("Server Error: " + e.getData() );
         },this);
         resource.configureRequest(function(){
           qx.core.Init.getApplication().getRoot().setEnabled(false);
@@ -439,19 +448,47 @@ qx.Class.define("bibsync.Application", {
       component.getComponent("mergedItem").getTableModel().setData(mergedItem);
     },
 
+    saveAll : function(){
+      this.save(true);
+    },
+
     /**
      * Save merged items
      * @return {void}
      */
-    save : function(){
-      console.log("Saving....  ");
+    save : function(all){
+
+      if (all===true){
+        var msg = "Start synchronization? This will irreversibly create, delete and overwrite entries in the target library.";
+        if( ! confirm(msg) ) return;
+      }
+
       component = this.__synopsisComponent;
       var tableModel = component.getComponent("mergedItem").getTableModel();
       var model  = component.getModel();
+      var items  = model.getItems();
       var action = model.getAction();
       var info   = model.getInfo();
       var target = info.getTarget();
+
+      // configure rest resource
       var rest = this.getRestResource("item");
+      rest.addListenerOnce("success",function(){
+        items.remove(items.getItem(model.getIndex()));
+        if( items.getLength() )
+        {
+          if ( model.getIndex() == items.getLength() )
+          {
+            model.setIndex(items.getLength()-1);
+          }
+          this.updateSynopsis();
+          if( all ){
+            this.save(1);
+          }
+        } else {
+          component.close();
+        }
+      },this);
 
       var data={};
       for (var i = 0; i < tableModel.getRowCount(); i++) {
@@ -463,19 +500,22 @@ qx.Class.define("bibsync.Application", {
       switch ( action )
       {
         case "remove":
-          if ( confirm("Remove item from collection?") ){
+          if ( all || confirm("Remove item from collection?") ){
             rest.removeCollectionItem( {
               application : target.getApplication(),
               type : target.getType(),
-              collectionKey : target.getCollectionKey(),
-              itemId: data.id
-            } );
+              id : target.getId(),
+              collectionKey : target.getCollectionKey()
+            }, data);
           }
           break;
 
          case "create":
-         if ( confirm("Create new item in collection?") ){
-           rest.invoke("createItem",{
+         if ( all || confirm("Create new item in collection?") ){
+           var serverAction =
+            info.getTarget().getApplication() == info.getSource().getApplication() ?
+            "copyItem" : "createItem";
+           rest.invoke(serverAction,{
              application : target.getApplication(),
              type : target.getType(),
              id : target.getId(),
@@ -484,13 +524,41 @@ qx.Class.define("bibsync.Application", {
          break;
 
          case "update":
-         rest.invoke("updateItem",{
-           application : target.getApplication(),
-           type : target.getType(),
-           id : target.getId(),
-         },data);
+          if ( all || confirm("Really update item?") ){
+           rest.invoke("updateItem",{
+             application : target.getApplication(),
+             type : target.getType(),
+             id : target.getId()
+           },data);
+         }
          break;
       }
+    },
+
+    copyFolder : function( source, target )
+    {
+      var msg = "This will copy the folder and its content selected in the left "+
+      "pane into the folder selected in the right pane. Continue?";
+      if( ! confirm( msg ) ) return;
+
+      var info={
+        source  : this.getCollectionInfo(source),
+        target  : this.getCollectionInfo(target)
+      };
+      if( ! info.source || ! info.target ) return;
+      var params = {
+        sourceApplication : info.source.application,
+        sourceType        : info.source.type,
+        sourceId          : info.source.id,
+        sourceCollectionKey : info.source.collectionKey,
+        targetApplication : info.target.application,
+        targetType        : info.target.type,
+        targetId          : info.target.id,
+        targetCollectionKey : info.target.collectionKey
+      };
+      var rest = this.getRestResource("copy");
+      rest.copy(params);
     }
+
   }
 });

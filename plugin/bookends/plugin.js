@@ -1,8 +1,11 @@
 var service = require("./services");
+var config  = require('../../config');
+
+// load custom console
+var console = config.getConsole();
 
 module.exports = function bookends(bibsync, done) {
 
-  console.log('Bookends plugin');
   var app = bibsync.getRouter();
 
   app.get('/bookends/libraries', service.libraries);
@@ -18,6 +21,8 @@ module.exports = function bookends(bibsync, done) {
 
   app.get('/bookends/moddates/:ids', service.moddates );
   app.get('/bookends/get/:ids/:field', service.get );
+
+  console.debug('Loaded Bookends plugin.');
 
   done(null,this);
 };

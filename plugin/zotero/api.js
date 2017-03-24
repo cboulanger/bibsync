@@ -1,24 +1,20 @@
-// npm modules
-var Zotero      = require('libzotero');
-var Promise     = require('promise');
-var JsonClient  = require('json-client');
-//var Tokens      = require('map-tokens');
-var request     = require('request');
-var _           = require('underscore');
-var unzip       = require('unzip');
-var tempfile    = require('tempfile');
-var fstream     = require('fstream');
-var fs          = require('fs');
+// modules
+var Zotero = require('libzotero');
+var Promise = require('promise');
+var JsonClient = require('json-client');
+var request = require('request');
+var _ = require('underscore');
 
-// local config
-var config      = require('../../config');
-var userLibrary   = new Zotero.Library("user", config.zotero.userId, "", config.zotero.apiKey);
-var zoteroServer  = new JsonClient("https://api.zotero.org/");
-var dictionary    = require('../bibsync/dictionary')(require('./dictionary'));
-var database      = require('../bibsync/db');
+//  config
+var config = require('../../config');
+var dictionary = require('../bibsync/dictionary')(require('./dictionary'));
+var userLibrary = new Zotero.Library("user", config.zotero.userId, "", config.zotero.apiKey);
+var zoteroServer = new JsonClient("https://api.zotero.org/");
 
-//Zotero.preferences.setPref("debug_level", 1);
+// load custom console
+var console = config.getConsole();
 
+// module vars
 var cache = {
   treeData: {}
 };
@@ -71,6 +67,14 @@ module.exports = {
     return groupLibrary;
   },
 
+  /**
+   * Returns the datastore api instance
+   * @return {Object}
+   */
+  getDatastore: function() {
+    return config.datastore.instance; // TODO
+  },
+
   /*
   -------------------------------------------------------------------------
   Sync API
@@ -112,33 +116,29 @@ module.exports = {
    *    data
    */
   getCollections: function(type, libraryId) {
-    console.log('zotero::getCollections("' + [type, libraryId].join('","') + '")');
+    console.debug('zotero::getCollections(' + [type, libraryId].join(',') + ')');
     var that = this;
     return new Promise(function(resolve, reject) {
       var library = that.getLibrary(type, libraryId);
-      library
-        .loadUpdatedCollections()
-        .then(function(result) {
-          var collectionObjects = library.collections.collectionObjects;
-          var collections = {};
-          var colllection;
-          for (var key in collectionObjects) {
-            colllection = library.collections.getCollection(key);
-            collections[key] = {
-              key: key,
-              name: colllection.apiObj.data.name,
-              parent: colllection.apiObj.data.parentCollection,
-              version: colllection.apiObj.version
-            };
-          }
-          //console.dir(collections);
-          cache.treeData[type + libraryId] = collections;
-          resolve(collections);
-        }).
-      catch(function(err) {
-        console.warn(err);
-        reject(err);
-      });
+      console.debug("Loading updated collections from server...");
+      library.loadUpdatedCollections()
+      .then(function(result) {
+        var collectionObjects = library.collections.collectionObjects;
+        var collections = {};
+        var colllection;
+        for (var key in collectionObjects) {
+          colllection = library.collections.getCollection(key);
+          collections[key] = {
+            key: key,
+            name: colllection.apiObj.data.name,
+            parentKey: colllection.apiObj.data.parentCollection,
+            version: colllection.apiObj.version
+          };
+        }
+        cache.treeData[type + libraryId] = collections;
+        resolve(collections);
+      })
+      .catch(reject);
     });
   },
 
@@ -150,22 +150,26 @@ module.exports = {
    * @return {Promise} Promise resolving with the collection data
    */
   getCollection: function(type, libraryId, collectionKey) {
-    console.log("zotero::getCollection("+[type, libraryId, collectionKey].join(",")+")");
-    // we don't have a cache yet, create it
+    console.debug("zotero::getCollection(" + [type, libraryId, collectionKey].join(",") + ")");
     var that = this;
-    if (!cache.treeData[type + libraryId]) {
-      return new Promise(function(resolve, reject) {
+    var cachedCollections = cache.treeData[type + libraryId];
+    var isCached = _.isObject( cachedCollections ) &&
+                   _.isObject( cachedCollections[collectionKey] );
+    return new Promise(function(resolve, reject) {
+      if ( isCached ) {
+        resolve( cachedCollections[collectionKey] );
+      } else {
+        console.debug("No cached collections. Need to get them from server.");
         that.getCollections(type, libraryId)
-          .then(function() {
-            that.getCollection(type, libraryId, collectionKey)
-              .then(resolve);
-          }).catch(function(err) {
-            reject(err);
-          });
-      });
-    }
-    // retrieve from cache
-    return Promise.resolve(cache.treeData[type + libraryId][collectionKey]);
+        .then(function(collections) {
+          // if( collections === undefined ){
+          //   reject("Houston, there is a problem");
+          // }
+          resolve(collections[collectionKey]);
+        })
+        .catch(reject);
+      }
+    });
   },
 
   /**
@@ -178,7 +182,7 @@ module.exports = {
    * @return {Map}
    */
   getCollectionSync: function(type, libraryId, collectionKey) {
-    console.log("zotero::getCollectionSync("+[type, libraryId, collectionKey].join(",")+")");
+    console.debug("zotero::getCollectionSync(" + [type, libraryId, collectionKey].join(",") + ")");
     if (!cache.treeData[type + libraryId]) {
       throw new Error("No cached data available");
     }
@@ -186,22 +190,22 @@ module.exports = {
   },
 
   /**
-  * Returns the ids of the items in the particular collection
-  * @param  {String} type          Library type
-  * @param  {Integer} libraryId     The numeric library id
-  * @param  {String} collectionKey
-  * @return {Promise} Promise resolving with the ids of the items in the collection
+   * Returns the ids of the items in the particular collection
+   * @param  {String} type          Library type
+   * @param  {Integer} libraryId     The numeric library id
+   * @param  {String} collectionKey
+   * @return {Promise} Promise resolving with the ids of the items in the collection
    */
-  getCollectionIDs : function(type, libraryId, collectionKey) {
-    console.log("zotero::getCollectionIDs("+[type, libraryId, collectionKey].join(",")+")");
-    var that=this;
+  getCollectionIDs: function(type, libraryId, collectionKey) {
+    console.log("zotero::getCollectionIDs(" + [type, libraryId, collectionKey].join(",") + ")");
+    var that = this;
     return new Promise(function(resolve, reject) {
-      var library = that.getLibrary( type, libraryId );
+      var library = that.getLibrary(type, libraryId);
       library.collections.getCollection(collectionKey).getMemberItemKeys()
-        .then(function(ids){
-          resolve(ids);
-        })
-        .catch(reject);
+      .then(function(ids) {
+        resolve(ids);
+      })
+      .catch(reject);
     });
 
   },
@@ -216,7 +220,7 @@ module.exports = {
    * @return {Array}  An array of collection keys
    */
   getCollectionChildKeysSync: function(type, libraryId, collectionKey) {
-    //console.log("zotero::getCollectionChildKeysSync("+[type, libraryId, collectionKey].join(",")+")");
+    console.debug("zotero::getCollectionChildKeysSync(" + [type, libraryId, collectionKey].join(",") + ")");
 
     if (!cache.treeData[type + libraryId]) {
       throw new Error("No cached data available");
@@ -224,7 +228,7 @@ module.exports = {
     var treeData = cache.treeData[type + libraryId];
     var keys = [];
     for (var key in treeData) {
-      if ( treeData[key].parent == collectionKey ) {
+      if (treeData[key].parentKey == collectionKey) {
         keys.push(treeData[key].key);
       }
     }
@@ -235,52 +239,55 @@ module.exports = {
    * Returns true if collections can be created, false if not
    * @return {Boolean}
    */
-  canCreateCollection : function(){
+  canCreateCollection: function() {
     return true;
   },
 
 
   /**
    * Adds a collection.
-   * @param  {String} type          The type of library
-   * @param  {Integer} libraryId    The id of the library
-   * @param {Map} data A Map containing the collection data. Must have at least
-   *                   these keys: name {String}, parent : {String}
-   * @return {Promise}  A Promise which resolves with the newly created key of the
-   *                    collection
+   * @param {String} type The type of library
+   * @param {String} libraryId The id of the library
+   * @param {Object} data A Map containing the collection data.
+   * Must have at least these keys: name {String}, parentKey : {String}
+   * @return {Promise} A Promise which resolves when the collections
+   * have been written to the server with the key of the new collection
    */
-  addCollection : function(type, libraryId, data){
-      throw new Error("Not implemented");
+  addCollection: function(type, libraryId, data) {
+    console.debug("zotero::addCollection(" + [type, libraryId, "(data)"].join(",") + ")");
+    if( !("name" in data && "parentKey" in data ) ){
+      throw "Data must contain keys 'name' and 'parentKey'";
+    }
+    var that = this;
+    var collection = that._addCollectionLocallySync(type, libraryId, data);
+    console.debug("Writing to the server ..." ) ;
+    return that.getLibrary(type, libraryId).collections
+    .writeCollections([collection])
+    .then(function(result) {
+      var newCollectionKey = result[0].returnCollections[0].get("key");
+      return newCollectionKey;
+    })
+    .catch(Promise.reject);
+    //});
   },
 
   /**
-   * Adds a collection locally (and synchronously). Needs to be synchronized with
-   * the remote target later.
-   * @param  {String} type          The type of library
-   * @param  {Integer} libraryId    The id of the library
-   * @param {Map} data A Map containing the collection data. Must have at least
-   *                   these keys: name {String}, parent : {String}
-   * @return {String}  The collection key of the newly created collection
+   * Adds a collection locally (and synchronously). Needs
+   * to be synchronized with the remote target later.
+   * @param {String} type The type of library
+   * @param {Integer} libraryId The id of the library
+   * @param {Map} data A Map containing the collection data. Must
+   * have at least these keys: name {String}, parentKey : {String}
+   * @return {Zotero.Collection} The newly created collection
    */
-  addCollectionLocallySync : function(type, libraryId, data){
-    	var library = this.getLibrary(type, libraryId);
-    	var collection = new Zotero.Collection();
-    	collection.associateWithLibrary(library);
-    	collection.set('name', data.name);
-    	collection.set('parentCollection', data.parent);
-    	return collection.get("key");
-  },
-
-  /**
-   * Synchronizes locally created / edited collection
-   * @param  {[type]} type      [description]
-   * @param  {[type]} libraryId [description]
-   * @param  {[type]} ids       [description]
-   * @return {[type]}           [description]
-   */
-  writeCollections : function(type, libraryId, ids)
-  {
-    throw new Error("Not implemented");
+  _addCollectionLocallySync: function(type, libraryId, data) {
+    console.debug("Adding collection locally...");
+    var library = this.getLibrary(type, libraryId);
+    var collection = new Zotero.Collection();
+    collection.associateWithLibrary(library);
+    collection.set('name', data.name);
+    collection.set('parentCollection', data.parentKey);
+    return collection;
   },
 
   /**
@@ -294,77 +301,112 @@ module.exports = {
    *    data
    */
   getCollectionItems: function(libraryType, libraryId, collectionKey, fields) {
-    console.log("zotero::getCollectionItems("+[libraryType, libraryId, collectionKey].join(",")+")");
+
+    console.debug("zotero::getCollectionItems(" + [libraryType, libraryId, collectionKey].join(",") + ")");
+
     var that = this;
+
     return new Promise(function(resolve, reject) {
-      var library = that.getLibrary(libraryType, libraryId);
-      library.loadItems({
-        collectionKey: collectionKey
-      }).then(function(data) {
-        var result = [];
-        var promises = [];
 
-        // iterate over items
-        data.loadedItems.forEach(function(item){
-          var globalItem = _.omit( dictionary.translateToGlobal( item.apiObj.data ), function(value){
-            return !value;
-          });
-          if ( _.isArray(fields) && fields.length ){
-            globalItem = _.pick( globalItem, fields );
-          }
-          // add type if missing
-          if ( ! globalItem.itemType )
-          {
-            globalItem.itemType = dictionary.getGlobalContent( "itemType", item.apiObj.data);
-          }
-
-          // add version
-          globalItem.version = item.get("version");
-
-          // add special fields if requested
-          if( _.isArray(fields) && fields.length ) {
-            if ( fields.indexOf("creatorSummary") !== -1 )
-            {
-              globalItem.creatorSummary = item.get("creatorSummary");
+      var result = [];
+      that.getLibrary(libraryType, libraryId)
+        .loadItems({
+          collectionKey: collectionKey
+        })
+        .then(function(data) {
+          //console.debug(data.loadedItems);
+          var promises = [];
+          // iterate over items
+          data.loadedItems.forEach(function(item) {
+            // THIS MUST GO INTO SEPARATE FUNCTION!!!!
+            var globalItem = _.omit(dictionary.translateToGlobal(item.apiObj.data), function(value) {
+              return !value;
+            });
+            if (_.isArray(fields) && fields.length) {
+              globalItem = _.pick(globalItem, fields);
             }
-            // add year if requested
-            if( fields.indexOf("year") !== -1 )
-            {
-              globalItem.year = item.get("year");
+            if (globalItem.itemType == "attachment") {
+              console.warn("Skipping '" + globalItem.title + "' - item type 'attachment' currently not supported. ");
+              return;
             }
-          }
+            // add type if missing
+            if (!globalItem.itemType) {
+              globalItem.itemType = dictionary.getGlobalContent("itemType", item.apiObj.data);
+            }
+            // add itemUri
+            globalItem.itemUri = item.apiObj.links.self.href;
 
-          // children
-          if( _.isArray(fields) ? _.intersection(fields, ["attachments","notes"]).length : 1 ) {
-            var parentItem = globalItem;
-            promises.push(new Promise(function(resolve,reject){
-              item.getChildren(item.owningLibrary).then(function(childItems){
-                //console.log("Item child count:" + childItems.length);
-                childItems.forEach(function(childItem){
-                  switch(childItem.get("itemType")){
-                    case "attachment":
-                    var filename = childItem.get("filename");
-                    parentItem.attachments =
-                      (parentItem.attachments?parentItem.attachments.split(/;/):[])
-                        .concat(filename).join(";");
-                    break;
-                  }
-                });
-                resolve();
+            // add special fields if requested
+            if (_.isArray(fields) && fields.length) {
+              if (fields.indexOf("creatorSummary") !== -1) {
+                globalItem.creatorSummary = item.get("creatorSummary");
+              }
+              // add year if requested
+              if (fields.indexOf("year") !== -1) {
+                globalItem.year = item.get("year");
+              }
+            }
+
+            // children
+            var doInspectChildren = _.isArray(fields) ? _.intersection(fields, ["attachments", "notes"]).length : true;
+            if (doInspectChildren) {
+              var parentItem = globalItem;
+              var p = new Promise(function(resolve, reject) {
+
+                item.getChildren(item.owningLibrary)
+                  .then(function(childItems) {
+                    //console.log("Item child count:" + childItems.length);
+                    childItems.forEach(function(childItem) {
+                      switch (childItem.get("itemType")) {
+                        case "attachment":
+                          var filename = childItem.get("filename");
+                          parentItem.attachments =
+                            (parentItem.attachments ? parentItem.attachments.split(/;/) : [])
+                            .concat(filename).join(";");
+                          break;
+                      }
+                    });
+                    // all children inspected
+                    resolve();
+                  }).catch(reject);
+
               }).catch(reject);
-            }));
-          }
 
-          result.push(globalItem);
-        });
+              promises.push(p);
+            }
 
-        // resolve when all child items have been inspected
-        Promise.all(promises).then(function(){
-            resolve(result);
-        }).catch(reject);
+            result.push(globalItem);
+          });
 
-      }).catch(reject);
+          // resolve when all child items have been inspected
+          return Promise.all(promises);
+        })
+        .then(function() {
+          resolve(result);
+        })
+        .catch(reject);
     });
+  },
+
+  /**
+   * Returns the canonical URI to the library
+   * @param  {String} libraryType [description]
+   * @param  {String} libraryId   [description]
+   * @return {String}
+   */
+  getLibraryUri: function(libraryType, libraryId) {
+    return ["https://api.zotero.org", libraryType + "s", libraryId].join("/");
+  },
+
+  /**
+   * Returns the canonical URI to the item
+   * @param  {String} libraryType [description]
+   * @param  {String} libraryId   [description]
+   * @param  {String} itemKey     [description]
+   * @return {String}
+   */
+  getItemUri: function(libraryType, libraryId, itemKey) {
+    return [this.getLibraryUri(libraryType + "s", libraryId), "items", itemKey].join("/");
   },
 
   /**
@@ -373,550 +415,439 @@ module.exports = {
    * @param  {String}  libraryType Library type (user/group)
    * @param  {Integer} libraryId   Library id
    * @param  {Object}  itemData    The item data
+   * * @param  {String}  targetCollectionKey The key of the collection in which the
+   * item is to be created. Optional, can also be passed in the target.collectionKey
+   * object path in itemDatainfo json data.
    * @return {Promise} A promise resolving with the id of the newly created item
    *
    */
-  createItem : function( libraryType, libraryId, itemData )
-  {
-    var info = JSON.parse(itemData.info);
-    if( info.source.application=="zotero")
-    {
-      return this.copyItem ( libraryType, libraryId, itemData );
-    }
-    return new Promise(function(resolve,reject){
+  createItem: function(libraryType, libraryId, itemData, targetCollectionKey) {
 
-      var sourceItemId = itemData.id;
+    console.debug("zotero::createItem(" + [libraryType, libraryId, "(data)",targetCollectionKey].join(",") + ")");
 
-      // console.log("=== from client ===");
-      // console.dir(itemData);
-      // console.dir(info);
+    var that = this;
 
-      delete itemData.id;
-      delete itemData.dateAdded;
-      delete itemData.info;
-      delete itemData.collections;
+    return new Promise(function(resolve, reject) {
 
-      var data = dictionary.translateToLocal(itemData);
-      // console.log("=== translated to local format ===");
-      // console.dir(data);
-      var library = this.getLibrary( libraryType, libraryId );
-      var item = new Zotero.Item();
-      item.associateWithLibrary(library);
-      item.initEmpty(data.itemType)
-      .then(function(item){
+      // static vars
+      var info = JSON.parse(itemData.info);
+      var sourceLibrary = that.getLibrary(info.source.type, info.source.id);
+      var targetLibrary = that.getLibrary(libraryType, libraryId);
+      var sourceLibUri = that.getLibraryUri(info.source.type, info.source.id);
+      var targetLibUri = that.getLibraryUri(libraryType, libraryId);
+      var sourceItemKey = itemData.id;
+      targetCollectionKey = targetCollectionKey || info.target.collectionKey; //TODO
 
-        // notes
-        if( data.notes ){
-          var childNote1 = new Zotero.Item();
-          childNote1.initEmptyNote();
-          childNote1.set('note', data.notes);
-    			item.notes = [childNote1];
-          delete data.notes;
-        }
+      var msg = 'Creating "' + itemData.title + '"';
+      console.debug("-".repeat(msg.length));
+      console.info(msg);
+      console.debug("-".repeat(msg.length));
 
-        // collection
-        item.addToCollection(info.target.collectionKey);
+      // check if entry exists
+      that.getDatastore()
+        .getTargetKey(sourceLibUri, sourceItemKey, targetLibUri)
+        .then(function(targetItemKey) {
 
-        // attachments
-        if( data.attachments ){
-          data.attachments.split(";").forEach(function(filename){
+          // item exists, link to new folder
+          if (targetItemKey) {
+            console.log("Item exists in target library, linking to folder...");
+            return targetLibrary
+              .loadItem(targetItemKey)
+              .then(function(item) {
+                if (item.get("collections").indexOf(targetItemKey) >= 0) {
+                  console.debug("Item already linked to folder. Nothing to do.");
+                  return Promise.resolve();
+                }
+                item.addToCollection(targetCollectionKey);
+                return item.writeItem();
+              })
+              .then(function(item) {
+                console.debug("Item has been linked to folder #" + targetCollectionKey);
+                return "OK";
+              });
 
-          },this);
-        }
+            // doesn't exist, create
+          } else {
+            return main();
+          }
+        })
+        .then(resolve)
+        .catch(reject);
 
-        // set properties
-        for( var key in data ) {
-          item.set(key,data[key]);
-        }
+      /**
+       * Main function
+       * @return {void}
+       */
+      function main() {
 
-        // write it to zotero server
-        item.writeItem().then(function(newItems){
-          //console.log("=== saved in library ===");
-          database.save(info, sourceItemId, item.key )
-            .then(resolve)
-            .catch(reject);
+        // console.debug(itemData);
+        // console.debug(info);
 
-        }).catch(reject);
-      })
-      .catch(reject);
+        delete itemData.id;
+        delete itemData.dateAdded;
+        delete itemData.info;
+        delete itemData.collections;
+
+        var data = dictionary.translateToLocal(itemData);
+        // console.log("=== translated to local format ===");
+        // console.dir(data);
+        //
+        var library = that.getLibrary(libraryType, libraryId);
+        var item = new Zotero.Item();
+
+        item.associateWithLibrary(library);
+
+        item.initEmpty(data.itemType)
+          .then(function(item) {
+            // notes
+            if (data.notes) {
+              console.debug("Create notes ....");
+              var childNote1 = new Zotero.Item();
+              childNote1.initEmptyNote();
+              childNote1.set('note', data.notes);
+              item.notes = [childNote1];
+              delete data.notes;
+            }
+            // collection
+            item.addToCollection(targetCollectionKey);
+
+            // attachments
+            if (data.attachments) {
+              console.debug("Create attachments ...");
+              data.attachments.split(";").forEach(function(filename) {
+                console.debug("TODO: Not adding attachment " + filename);
+              }, this);
+            }
+            // set properties
+            for (var key in data) {
+              item.set(key, data[key]);
+            }
+            // write it to zotero server
+            return item.writeItem();
+          })
+          .then(getItemFromWriteResult)
+          //.then(debugResult)
+          .then(saveLink)
+          .then(resolve)
+          .catch(reject);
+      }
+
+      function debugResult(result) {
+        console.debug(result);
+        return Promise.resolve(result);
+      }
+
+      function getItemFromWriteResult(result) {
+        return Promise.resolve(result[0].returnItems[0]);
+      }
+
+      function saveLink(targetItem) {
+        return that.getDatastore().saveLink(
+          sourceLibUri, sourceItemKey,
+          targetLibUri, targetItem.get("key")
+        );
+      }
 
     }.bind(this));
   },
 
   /**
-   * Copies an  item from a (differen) library
+   * Copies an  item from a (different) zotero library
    *
    * @param  {String}  libraryType Library type (user/group)
    * @param  {Integer} libraryId   Library id
    * @param  {Object}  itemData    The item data
+   * @param  {String}  targetCollectionKey The key of the collection in which the
+   * item is to be created. Optional, can also be passed in the target.collectionKey
+   * object path in itemDatainfo json data.
    * @return {Promise} A promise resolving with the id of the newly created item
    *
    */
-  copyItem : function( libraryType, libraryId, itemData )
-  {
-    var info = JSON.parse(itemData.info);
-    console.log("-".repeat(80));
-    console.log("Copying item #" + itemData.id );
-    console.log("-".repeat(80));
+  copyItem: function(libraryType, libraryId, itemData, targetCollectionKey) {
 
-    //console.dir(info);
-
-    var sourceLibrary = this.getLibrary( info.source.type, info.source.id );
-    var targetLibrary = this.getLibrary( libraryType, libraryId );
-    var sourceItem  = null;
-    var targetItem  = null;
-    var targetItemKey = "";
-    var sourceAttachmentItems = [];
-
+    console.debug("zotero::copyItem(" + [libraryType, libraryId, "(data)",targetCollectionKey].join(",") + ")");
     var that = this;
 
-    return new Promise(function(resolve,reject){
-      sourceLibrary.loadItem( itemData.id )
-      .then(function(item){
-        sourceItem = item;
-        return sourceLibrary.sendToLibrary([sourceItem],targetLibrary);
-      })
-      .then(function(result){
-        targetItemKey = result[0].returnItems[0].get("key");
-        return targetLibrary.loadItem( targetItemKey );
-      })
-      .then(function(item){
-        targetItem = item;
-        return sourceItem.getChildren(sourceLibrary);
-      })
-      .then(copyChildItems)
-      .then(addTargetItemToCollection)
-      .then(reloadTargetItem)
-      .then(function(targetItem){
-        return targetItem.getChildren(targetLibrary);
-      })
-      .then(configureChildItems)
-      .then(function(){
-        console.log("=== DONE ===");
-        resolve("OK");
-      })
-      .catch(reject);
-    });
+    return new Promise(function(resolve, reject) {
 
-    /**
-     * Reload the copied item from the target database
-     * @return {Promise} A Promise that resolves with the reloaded target item
-     */
-    function reloadTargetItem(){
-      return targetLibrary.loadItem( targetItemKey );
-    }
+      // static vars
+      var info = JSON.parse(itemData.info);
+      var sourceLibrary = that.getLibrary(info.source.type, info.source.id);
+      var targetLibrary = that.getLibrary(libraryType, libraryId);
+      var sourceLibUri  = that.getLibraryUri(info.source.type, info.source.id);
+      var targetLibUri  = that.getLibraryUri(libraryType, libraryId);
+      var sourceItemKey = itemData.id;
+      targetCollectionKey = targetCollectionKey || info.target.collectionKey;
 
-    /**
-     * Adds the copied item to the target collection
-     * @return {Promise} A pormise that resolves when the item has been written
-     * to the database
-     */
-    function addTargetItemToCollection()
-    {
-      var targetCollectionKey =  info.target.collectionKey;
-      console.log(">>> Saving and adding item to collection #"+ targetCollectionKey);
-      targetItem.addToCollection(targetCollectionKey);
-      targetItem.associateWithLibrary(targetLibrary);
-      return targetItem.writeItem();
-    }
+      // these vars will be populated in the subfunctions
+      var sourceItem = null;
+      var targetItem = null;
+      var targetItemKey = "";
+      var sourceAttachmentItems = [];
 
-    /**
-     * Creates copies of child items. Implemented so far:
-     *  - file attachments:
-     *  - notes
-     * @param  {Zotero.Items[]} childItems An array of child items
-     * @return {Promise}   A promise that resolves when all child items copies are
-     *                     created.
-     */
-    function copyChildItems(childItems){
-      // console.log("=== sourceChildItems ===");
-      // console.dir(childItems);
+      var msg = 'Copying "' + itemData.title + '"';
+      console.debug("-".repeat(msg.length));
+      console.info(msg);
+      console.debug("-".repeat(msg.length));
+      console.debug(["Source itemKey:", sourceItemKey, "; target collectionKey:", targetCollectionKey].join(" "));
 
-      var childItemPromises = [];
-      targetItem.attachments = [];
-      targetItem.notes = [];
+      // check if entry exists
+      that.getDatastore()
+        .getTargetKey(sourceLibUri, sourceItemKey, targetLibUri)
+        .then(function(targetItemKey) {
 
-      childItems.forEach(function(childItem){
-        var item = new Zotero.Item(), p, keys;
-        var itemType = childItem.get("itemType");
-        var linkMode = childItem.get("linkMode");
-        var extendedItemType = itemType + (linkMode ? "/" + linkMode : "");
-        switch( extendedItemType ){
-
-          case "attachment/imported_file":
-          console.log(">>> Adding file attachment " + childItem.get("title") );
-          p = item.initEmpty('attachment',"imported_file")
-          .then(function(attachmentItem){
-            ["title","contentType","charset","filename","url"].forEach(function(key){
-                attachmentItem.set(key, childItem.get(key) );
-            });
-            attachmentItem.set('parentItem', targetItem.get("key"));
-            attachmentItem.associateWithLibrary(targetLibrary);
-            targetItem.attachments.push(attachmentItem);
-            sourceAttachmentItems.push(childItem);
-          });
-          childItemPromises.push(p);
-          break;
-
-          case "note":
-          console.log(">>> Adding note " + childItem.get("title") );
-          p = item.initEmpty('note')
-          .then(function(noteItem){
-            keys = ["title","note","tags","relations","contentType","charset"];
-            keys.forEach(function(key){
-              noteItem.set(key,childItem.get(key));
-            });
-            noteItem.set('parentItem', targetItem.get("key"));
-            noteItem.associateWithLibrary(targetLibrary);
-            targetItem.notes.push(noteItem);
-          });
-          childItemPromises.push(p);
-          break;
-
-          default:
-          console.log(">>> Not adding "+extendedItemType + " " + childItem.get("title") );
-        }
-      });
-      return Promise.all(childItemPromises);
-    }
-
-    /**
-     * Configures the child item clones created by copyChildItems after they
-     * have been initialized on the server
-     * @param  {Zotero.Items[]} childItems
-     * @return {Promise}      A promise that resolves when all the child items
-     *                        have been configured
-     */
-    function configureChildItems(childItems)
-    {
-      //console.dir(childItems);
-      //console.dir(childItems.map(function(item){return item.apiObj.data;}));
-      var attachmentIndex = 0, sourceAttachmentItem;
-      var promises = [];
-      childItems.forEach(function(childItem){
-        if( childItem.get("itemType") == "attachment" ){
-          sourceAttachmentItem = sourceAttachmentItems[attachmentIndex++];
-          // console.dir(sourceAttachmentItem.apiObj);
-          // console.dir(childItem.apiObj);
-
-          ["note","tags","md5","mtime"].forEach(function(key){
-              childItem.set(key, sourceAttachmentItem.get(key) );
-          });
-          var href = ["https://api.zotero.org",info.source.type,
-            info.source.id,"items",sourceAttachmentItem.get("key")].join("/");
-          childItem.set('relations', { "owl:sameAs" : href });
-          promises.push( childItem.writeItem() );
-
-          // this transfers the real file attachment
-          //console.dir(childItem.apiObj);
-          promises.push(that.transferAttachmentFile( info, sourceAttachmentItem, childItem ));
-        }
-      });
-      return Promise.all(promises);
-    }
-
-  },
-
-  /**
-   * Transfer binary file data from one storage to the other. Supports
-   * Zotero storage and WebDAV storage
-   * @param  {Object} info       Source and target information
-   * @param  {Zotero.Item} sourceItem [description]
-   * @param  {Zotero.Item} targetItem [description]
-   * @return {Promise}            A promise that resolves when the transfer is complete
-   */
-  transferAttachmentFile : function( info, sourceItem, targetItem )
-  {
-    var that = this;
-    return new Promise(function(resolve,reject)
-    {
-      // console.log( ">>> Source is " + (isWebDav(info.source) ? "WebDAV":"Zotero") + " storage");
-      // console.dir(sourceItem.apiObj.data);
-      // console.log( ">>> Target is " + (isWebDav(info.target) ? "WebDAV":"Zotero") + " storage");
-      // console.dir(targetItem.apiObj.data);
-      //
-      console.log("=== Begin transfer of " + sourceItem.get("title") + " ===");
-
-      download()
-      .then(upload)
-      .then(registerUpload)
-      .then( function(){
-        console.log("=== Transfer of " + sourceItem.get("title") + " completed ===");
-        resolve();
-      })
-      .catch(reject);
-
-
-      /**
-       * Checks if library has a WebDAV storage
-       * @param  {Object} libInfo map with static information on the library
-       * @return Boolean
-       */
-      function isWebDav( libInfo )
-      {
-        return libInfo.type == "user" && config.zotero.webdavUrl;
-      }
-
-      /**
-       * Returns the options map for the Request executable function
-       * @param  {Object} libInfo map with static information on the library
-       * @param  {Zotero.item} item    The source or target item
-       * @return {Object}
-       */
-      function getRequestOptions( libInfo, item )
-      {
-        if( libInfo.type == "user" && config.zotero.webdavUrl ) {
-          return {
-            url: [config.zotero.webdavUrl, item.get("key") + ".zip"].join("/"),
-            auth: {
-                username: config.zotero.webdavUser,
-                password: config.zotero.webdavPassword
-            },
-            headers : []
-          };
-        } else {
-          return {
-            url: [ "https://api.zotero.org",
-                   (libInfo.type + "s"), libInfo.id,
-                   "items", item.get("key"), "file"].join("/"),
-            headers : {
-              "Authorization": "Bearer " + config.zotero.apiKey
-            }
-          };
-        }
-      }
-
-      /**
-       * Downloads the source file to a temporary file
-       * @return {Promise} Promise resolving with the path to the temporary file
-       */
-      function download()
-      {
-        return new Promise(function(resolve,reject){
-          var file = tempfile(".tmp");
-          var options = getRequestOptions( info.source, sourceItem );
-
-          if ( isWebDav(info.source) ){
-            console.log(">>> Streaming ZIP from WebDAV server at " + options.url);
-            request.get(options)
-            .on("error", reject)
-            .pipe(unzip.Parse())
-            .on("entry", function(entry){
-              console.log( ">>> Found  " + entry.path );
-              if (entry.path === sourceItem.get("filename") ) {
-                console.log( ">>> Extracting ZIP file to temporary file ..." );
-                //console.log( ">>> " + file );
-               entry.pipe(fs.createWriteStream(file))
-                .on("close",function(){
-                  console.log( ">>> Done extracting " + entry.path );
-                  resolve(file);
-                });
-              } else {
-                entry.autodrain();
-              }
-            });
-
-          } else {
-            console.log(">>> TODO: Streaming normal file from Zotero server ...");
-            reject("Not implemented");
-          }
-        });
-      }
-
-
-      /**
-       * Authorizes the upload with the Zotero server
-       * @param  {String} filePath Path to the file to be uploaded
-       * @return {Promise} Promise resolving with a map with upload information
-       */
-      function getUploadAutorization(filePath)
-      {
-        // POST /users/<userID>/items/<itemKey>/file
-        // Content-Type: application/x-www-form-urlencoded
-        // If-None-Match: *
-        // md5=<hash>&filename=<filename>&filesize=<bytes>&mtime=<milliseconds>
-        // Returns:
-        // - for Zotero storage:
-        // {
-        //   "url": ...,
-        //   "contentType": ...,
-        //   "prefix": ...,
-        //   "suffix": ...,
-        //   "uploadKey": ...
-        // }
-        // or
-        // { "exists": 1 }
-
-        return new Promise(function(resolve,reject)
-        {
-          var fileStat = fs.statSync(filePath);
-          var options = getRequestOptions( info.target, targetItem);
-          console.log(">>> Requesting upload authorization for " +  options.url );
-          options.form = {
-            md5     : sourceItem.get("md5"),
-            filename: sourceItem.get("filename"),
-            filesize: fileStat.size,
-            mtime   : sourceItem.get("mtime"),
-            //params  : 1
-          };
-          options.headers["If-None-Match"] = "*";
-          request.post(options,function(err, response, body){
-            if( response.statusCode === 200){
-              var result = JSON.parse(body);
-              return resolve(result);
-            } else if ( ! err ) {
-              err = new Error( "HTTP Error Code " + response.statusCode + ": " + body );
-            }
-            console.log(">>> " + err);
-            console.dir(options);
-            reject(err);
-          });
-        });
-      }
-
-
-      /**
-       * Uploads the file to the given storage
-       * @param  {String} filePath The path to the file
-       * @return {Promise}            Promise resolving with the uploadKey
-       */
-      function upload(filePath)
-      {
-        //
-        // POST file to Zotero Server
-        //
-        //   Concatenate prefix, the file contents, and suffix and POST to url
-        //   with the Content-Type header set to contentType.
-        //
-        //   prefix and suffix are strings containing multipart/form-data.
-        //   In some environments, it may be easier to work directly with the
-        //   form parameters. Add params=1 to the upload authorization request
-        //   above to retrieve the individual parameters in a params array,
-        //   which will replace contentType, prefix, and suffix.
-        //
-        //   Common Responses
-        //   201 Created	The file was successfully uploaded.
-        //
-
-        return new Promise(function(resolve, reject)
-        {
-          if( isWebDav( info.target ) ) {
-
-            console.log(">>> TODO: uploading zipped file to WebDAV server ...");
-            reject("Not implemented!");
-
-          } else {
-
-            getUploadAutorization(filePath)
-            .then(function(uploadConfig){
-
-              console.log(">>> Received upload authorization...");
-              //console.dir(uploadConfig);
-
-              // File is duplicate
-              if ( uploadConfig.exists ) {
-                console.log(">>> File '" + sourceItem.get("filename") + "' already exists.");
-                return resolve(null);
-              }
-
-              // Create WriteStream
-              var fileStat = fs.statSync(filePath);
-              var uploadSize = fileStat.size + uploadConfig.prefix.length + uploadConfig.suffix.length;
-              var options = {
-                url : uploadConfig.url,
-                headers : {
-                  "Content-Type"   : uploadConfig.contentType,
-                  "Content-Length" : uploadSize
+          // item exists, link to new folder
+          if (targetItemKey) {
+            console.log("Item exists in target library, linking to folder...");
+            return targetLibrary
+              .loadItem(targetItemKey)
+              .then(function(item) {
+                if (item.get("collections").indexOf(targetItemKey) >= 0) {
+                  console.debug("Item already linked to folder. Nothing to do.");
+                  return Promise.resolve();
                 }
-              };
-              var bytes = 0;
-              var writeStream = request.post(options)
-              .on("error", reject )
-              .on('response', function(response) {
-                switch( response.statusCode ){
-                  case 201:
-                  case 204:
-                  console.log(">>> Upload completed. Bytes written: " + bytes);
-                  return resolve(uploadConfig.uploadKey);
-
-                  default:
-                  err = "Http Error " + response.statusCode + ": " + response.headers;
-                  reject( err );
-                }
+                item.addToCollection(targetCollectionKey);
+                return item.writeItem();
+              })
+              .then(function(item) {
+                console.debug("Item has been linked to folder #" + targetCollectionKey);
+                return "OK";
               });
 
-              // Create ReadStream and pipe into WriteStream
-              var multiStream = require('multistream');
-              var intoStream  = require('into-stream');
-              var streams = [
-                intoStream(uploadConfig.prefix),
-                fs.createReadStream( filePath ),
-                intoStream(uploadConfig.suffix)
-              ];
-              multiStream(streams)
-              .on("error", reject )
-              .on("data",function(chunk){
-                bytes += chunk.length;
-                console.log("    Received " +  bytes + " of " + uploadSize + " bytes of data.");
-              })
-              .pipe( writeStream );
+            // doesn't exist, create
+          } else {
+            return main();
+          }
+        })
+        .then(resolve)
+        .catch(reject);
+
+      function main() {
+        return new Promise(function(resolve, reject) {
+
+          sourceLibrary
+            .loadItem(itemData.id)
+            .then(setSourceItemAndCopyToTargetLibrary)
+            .then(loadTargetItemFromSendToLibraryResult)
+            .then(setTargetItemAndLoadSourceChildItems)
+            .then(copyChildItems)
+            .then(configureAndWriteTargetItem)
+            .then(reloadTargetItem)
+            .then(loadTargetChildItems)
+            .then(configureChildItems)
+            .then(saveLink)
+            .then(function() {
+              console.debug("Done.");
+              resolve("OK");
             })
             .catch(reject);
-          }
         });
       }
 
       /**
-       * Registers the upload with the Zotero server
-       * @param  {String|null} uploadKey The upload key or null if
-       *                                 registration is to be skipped (i.e., when
-       *                                 the file already exists.)
-       * @return {void}
+       * Copies the given source item to the target library
+       * Also assigns the item to the closure variable sourceItem
+       * @param  {Zotero.item} item Source item
+       * @return {Promise} Promise that resolves with the (incomplete)
+       * copied item in the path [0].returnItems[0]
        */
-      function registerUpload(uploadKey)
-      {
-        // POST /users/<userID>/items/<itemKey>/file
-        // Content-Type: application/x-www-form-urlencoded
-        // If-None-Match: *
-        // upload=<uploadKey>
-        // For existing attachments, use If-Match: <hash>, where <hash> is the
-        // previous MD5 hash of the file, provided as the md5 property in the
-        // attachment item.
-        //
-        // Common Responses
-        // 204 No Content	The upload was successfully registered.
-        // 412 Precondition Failed	The file has changed remotely since
-        // retrieval (i.e., the provided ETag no longer matches).
-        return new Promise(function(resolve, reject)
-        {
-          if( uploadKey === null ){
-            return resolve();
-          }
+      function setSourceItemAndCopyToTargetLibrary(item) {
+        console.debug("Copying item to target library...");
+        sourceItem = item;
+        return sourceLibrary.sendToLibrary([sourceItem], targetLibrary);
+      }
 
-          if( isWebDav( info.target ) ) {
-            console.log(">>> Registration of upload not neccessary for WebDAV storage.");
-            return resolve();
-          } else {
-            console.log(">>> Registering upload with Zotero storage ...");
-            var options = getRequestOptions(info.target, targetItem );
-            options.form = { upload : uploadKey};
-            options.headers["If-None-Match"] = "*";
-            request.post(options,function(err, response, body){
-              if ( err ) reject (err);
-              switch( response.statusCode){
-                case 200:
-                case 204:
-                console.log(">>> Upload registered.");
-                return resolve();
+      /**
+       * Retrieves the key of the target item from the result of
+       * a Zotero.Item.prototype.sentToLibrary result and loads the item.
+       * Also assigns the key to the sourceItem closure variable
+       * @param  {Object} result
+       * @return {Promise} A promise that resolves with a Zotero.Item instance
+       */
+      function loadTargetItemFromSendToLibraryResult(result) {
+        targetItemKey = result[0].returnItems[0].get("key");
+        console.debug("Target item key is " + targetItemKey);
+        return targetLibrary.loadItem(targetItemKey);
+      }
 
-                default:
-                console.log("HTTP Error " + response.statusCode + ": " + body );
-                resolve();
+      /**
+       * Assigns the passed Zotero.Item to the targetItem closure variable,
+       * then loads the children of the source item.
+       * @param {Zotero.Item} The (incomplete) targetItem
+       * @return {Promise} A Promise that resolves with an array containing
+       * instances of Zotero.Item
+       */
+      function setTargetItemAndLoadSourceChildItems(item) {
+        if (!item) {
+          reject("Error creating item. Aborting.");
+        }
+        targetItem = item;
+        return sourceItem.getChildren(targetLibrary);
+      }
+
+      /**
+       * Reload the copied item from the target database
+       * @return {Promise} A Promise that resolves with the reloaded target item
+       */
+      function reloadTargetItem() {
+        return targetLibrary.loadItem(targetItemKey);
+      }
+
+      /**
+       * Load the children of the given item and return them. This also assigns
+       * the passed item to the targetItem closure variable
+       * @param  {Zotero.Item} item The
+       * @return {Promise} A Promise that resolves with an array containing
+       * instances of Zotero.Item
+       */
+      function loadTargetChildItems(item) {
+        targetItem = item;
+        return targetItem.getChildren(targetLibrary);
+      }
+
+      /**
+       * Adds the copied item to the target collection and add some properties.
+       * @return {Promise} A pormise that resolves when the item has been written
+       * to the database
+       */
+      function configureAndWriteTargetItem() {
+        var globalId = itemData.globalId;
+        console.debug("Saving and adding item to collection #" + targetCollectionKey);
+        targetItem.addToCollection(targetCollectionKey);
+        targetItem.associateWithLibrary(targetLibrary);
+        return targetItem.writeItem();
+      }
+
+      /**
+       * Creates copies of child items. Implemented so far:
+       *  - file attachments
+       *  - notes
+       * @param  {Zotero.Items[]} childItems An array of child items
+       * @return {Promise}   A promise that resolves when all child items copies are
+       *                     created.
+       */
+      function copyChildItems(childItems) {
+        console.log("Copying child items to target library...");
+        // console.log("=== sourceChildItems ===");
+        // console.dir(childItems.map(function(item){return item.apiObj.data;}));
+
+        var childItemPromises = [];
+        targetItem.attachments = [];
+        targetItem.notes = [];
+
+        childItems.forEach(function(childItem) {
+          var item = new Zotero.Item(),
+            p, keys;
+          var itemType = childItem.get("itemType");
+          var linkMode = childItem.get("linkMode");
+          var extendedItemType = itemType + (linkMode ? "/" + linkMode : "");
+          switch (extendedItemType) {
+
+            case "attachment/imported_file":
+            case "attachment/imported_url":
+
+              // TODO: Implement
+              if (childItem.get("title") == "Snapshot") {
+                console.log("Skipping Snapshot.");
+                return;
               }
-            }); // <== this level of nesting is annoying...
+
+              console.log("Adding file attachment " + childItem.get("title"));
+              p = item.initEmpty('attachment', "imported_file")
+                .then(function(attachmentItem) {
+                  ["title", "contentType", "charset", "filename", "url"].forEach(function(key) {
+                    attachmentItem.set(key, childItem.get(key));
+                  });
+                  attachmentItem.set('parentItem', targetItem.get("key"));
+                  attachmentItem.associateWithLibrary(targetLibrary);
+                  targetItem.attachments.push(attachmentItem);
+                  sourceAttachmentItems.push(childItem);
+                });
+              childItemPromises.push(p);
+              break;
+
+            case "note":
+              console.log("Adding note " + childItem.get("title"));
+              p = item.initEmpty('note')
+                .then(function(noteItem) {
+                  keys = ["title", "note", "tags", "relations", "contentType", "charset"];
+                  keys.forEach(function(key) {
+                    noteItem.set(key, childItem.get(key));
+                  });
+                  noteItem.set('parentItem', targetItem.get("key"));
+                  noteItem.associateWithLibrary(targetLibrary);
+                  targetItem.notes.push(noteItem);
+                });
+              childItemPromises.push(p);
+              break;
+
+            default:
+              console.log("Skipping " + extendedItemType + " " + childItem.get("title"));
           }
         });
+        return Promise.all(childItemPromises);
       }
+
+      /**
+       * Configures the child item clones created by copyChildItems after they
+       * have been initialized on the server
+       * @param  {Zotero.Items[]} childItems
+       * @return {Promise}      A promise that resolves when all the child items
+       *                        have been configured
+       */
+      function configureChildItems(childItems) {
+        console.debug("Configuring copied child items...");
+        //console.dir(childItems);
+        //console.dir(childItems.map(function(item){return item.apiObj.data;}));
+        var attachmentIndex = 0,
+          sourceAttachmentItem;
+        var promises = [];
+        childItems.forEach(function(childItem) {
+          if (childItem.get("itemType") == "attachment") {
+            sourceAttachmentItem = sourceAttachmentItems[attachmentIndex++];
+            // console.dir(sourceAttachmentItem.apiObj);
+            // console.dir(childItem.apiObj);
+
+            ["note", "tags", "md5", "mtime"].forEach(function(key) {
+              childItem.set(key, sourceAttachmentItem.get(key));
+            });
+            var href = ["https://api.zotero.org", info.source.type,
+              info.source.id, "items", sourceAttachmentItem.get("key")
+            ].join("/");
+            childItem.set('relations', {
+              "owl:sameAs": href
+            });
+            promises.push(childItem.writeItem());
+
+            // this transfers the real file attachment
+            //console.dir(childItem.apiObj);
+            var p = require('./attachments').transferFile(info, sourceAttachmentItem, childItem);
+            promises.push(p);
+          }
+        });
+        return Promise.all(promises);
+      }
+
+      function saveLink() {
+        return that.getDatastore().saveLink(
+          sourceLibUri, sourceItemKey,
+          targetLibUri, targetItem.get("key")
+        );
+      }
+
     });
-  }
+  },
+
+  updateItem: function(libraryType, libraryId) {
+    console.debug("zotero::updateItem(" + [libraryType, libraryId, "(data)"].join(",") + ")");
+    console.warn("Update item not implemented, ignoring request ... ");
+    return Promise.resolve("not implemented");
+  },
+
+  removeCollectionItem: function(libraryType, libraryId) {
+    console.debug("zotero::removeCollectionItem(" + [libraryType, libraryId, "(data)"].join(",") + ")");
+    console.warn("Remove item not implemented, ignoring request ... ");
+    return Promise.resolve("not implemented");
+  },
+
 };

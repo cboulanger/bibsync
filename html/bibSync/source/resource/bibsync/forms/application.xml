@@ -56,14 +56,24 @@
         </table>
     </composite>
 
-    <composite column-count="auto" align-x="center" column-flexes="1 1" max-width="300" col-span="2">
+    <composite column-count="auto" align-x="center" col-span="2">
 
-        <button label="Sync left to right" id="btnSyncLeftRight" enabled="true">
+      <button label="Copy folder →" id="btnSyncLeftRight" enabled="true">
+          <script event="execute">
+              $.Qookery.getService("app").copyFolder("left", "right");
+          </script>
+      </button>
+        <button label="Manual sync →" id="btnSyncLeftRight" enabled="true">
             <script event="execute">
                 $.Qookery.getService("app").sync("left", "right");
             </script>
         </button>
-        <button label="Sync right to left" id="btnSyncRightLeft" enabled="true">
+        <button label="Copy folder ←" id="btnCopyLeftRight" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").copyFolder("right", "left");
+            </script>
+        </button>
+        <button label="Manual sync ←" id="btnCopyRightLeft" enabled="true">
             <script event="execute">
                 $.Qookery.getService("app").sync("right", "left");
             </script>

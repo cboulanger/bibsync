@@ -348,6 +348,8 @@ var types = {
  * @type {Object}
  */
 var fields = {
+
+  //
   id: {
     label: 'Internal reference ID',
     RIS: 'ID',
@@ -363,6 +365,14 @@ var fields = {
     RIS: 'U1',
     bibtex: 'key'
   },
+  globalId : {
+    label : "Global ID",
+    RIS : false,
+    bibtex : false
+  },
+
+  //
+
   accessDate: {
     label: 'Access Date',
     RIS: 'Y2',

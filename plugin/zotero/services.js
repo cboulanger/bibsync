@@ -1,5 +1,35 @@
 var api  = require("./api");
 
+var config = require('../../config');
+
+// load custom console
+var console = config.getConsole();
+
+/**
+ * Function used when the service completed succesfully
+ * @param  {Object}   res The express response object
+ * @return {Function} A function that converts the result into JSON
+ * and returns it to the client with the express response object
+ */
+function success( res ){
+  return function( result ){
+    res.json( result );
+  };
+}
+
+/**
+ * Factory function that returns the function for the .catch() method
+ * of a promise
+ * @param  {Object}   res The express response object
+ * @return {Function} A function that sends a HTTP error response
+ */
+function fail(res){
+  return function( error ){
+    console.warn(""+err);
+    res.status(500).send(""+err);
+  };
+}
+
 module.exports =
 {
   /**
@@ -11,13 +41,8 @@ module.exports =
    */
   libraries : function(req, res) {
     api.getLibraries()
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
 
@@ -32,13 +57,8 @@ module.exports =
     var type  = req.params.type;
     var libId = req.params.id;
     api.getCollections(type, libId)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -53,9 +73,7 @@ module.exports =
     var libId = req.params.id;
     api.getCollections(type, libId)
       .then(function( result ){
-
         var nodes = [{children:[]}];
-
         // first pass: create all nodes
         for ( var key in result )
         {
@@ -70,16 +88,13 @@ module.exports =
         for ( key in result )
         {
           var childNode  = nodes[result[key].index];
-          var parentKey  = result[key].parent;
+          var parentKey  = result[key].parentKey;
           var parentNode = parentKey ? nodes[result[parentKey].index] : nodes[0];
           parentNode.children.push(childNode);
         }
         res.json( nodes );
       })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+      .catch(fail(res));
   },
 
   /**
@@ -95,13 +110,8 @@ module.exports =
     var id   = req.params.id;
     var collection = req.params.collection;
     api.getCollectionIds(type,id,collection)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
 
@@ -118,13 +128,8 @@ module.exports =
     var id   = req.params.id;
     var collection = req.params.collection;
     api.getCollectionItems(type, id, collection, ['id','creatorSummary','title','year'])
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -140,32 +145,8 @@ module.exports =
     var id   = req.params.id;
     var collection = req.params.collection;
     api.getCollectionItems(type, id, collection)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
-  },
-
-  /**
-   * Removes an item from the collection
-   * DELETE "/zotero/:type/:id/collections/:collectionKey/items/:itemId
-   * @param  {Object} req Express request object
-   * @param  {Object} res Express response object
-   * @return {Unknown} An arbitrary json value
-   */
-  removeCollectionItem : function(req,res)
-  {
-    api.removeCollectionItem( req.params.type,req.params.id, req.params.collectionKey, req.params.itemId )
-      .then(function( result ){
-          res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -181,17 +162,12 @@ module.exports =
     var id   = req.params.id;
     var ids = req.params.ids.split(/,/);
     api.getReferenceData(ids)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
-   * Creates a new item in the library
+   * Creates a new item in the library from client data
    * POST /zotero/:type/:id/items
    * @param  {Object} req Express request object
    * @param  {Object} res Express response object
@@ -200,13 +176,24 @@ module.exports =
   createItem : function(req,res)
   {
     api.createItem( req.params.type,req.params.id, req.body )
-      .then(function( result ){
-          res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
+  },
+
+
+  /**
+   * Creates a new item in the library as a copy of an existing item on
+   * the server
+   * PUT /zotero/:type/:id/items
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {Unknown} An arbitrary json value
+   */
+  copyItem : function(req,res)
+  {
+    api.copyItem( req.params.type,req.params.id, req.body )
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -219,17 +206,24 @@ module.exports =
   updateItem : function(req,res)
   {
     api.updateItem( req.params.type,req.params.id, req.body.data )
-      .then(function( result ){
-          res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
 
-
+  /**
+   * Removes an item from a collection (doesn't delete it)
+   * PUT /zotero/:type/:id/items/:itemId
+   * @param  {Object} req Express request object
+   * @param  {Object} res Express response object
+   * @return {void}
+   */
+  removeCollectionItem : function(req,res)
+  {
+    api.removeCollectionItem( req.params.type,req.params.id, req.body.data )
+    .then(success(res))
+    .catch(fail(res));
+  },
 
 ///////////////////
   /**
@@ -242,13 +236,8 @@ module.exports =
   formatReferences : function(req,res)
   {
     api.getFormattedRefs(req.params.ids,req.params.style)
-      .then(function( result ){
-          res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -261,13 +250,8 @@ module.exports =
   moddates : function(req,res)
   {
     api.getModificationDates(req.params.ids)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   },
 
   /**
@@ -280,12 +264,7 @@ module.exports =
   get : function(req,res)
   {
     api.get(req.params.ids,req.params.field)
-      .then(function( result ){
-        res.json( result );
-      })
-      .catch(function(err){
-        console.warn(err);
-        res.status(500).send(err);
-      });
+    .then(success(res))
+    .catch(fail(res));
   }
 };

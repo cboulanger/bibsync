@@ -1,12 +1,20 @@
 // Uses code by ComplexPoint on https://www.sonnysoftware.com/phpBB3/viewtopic.php?f=2&t=4017
 
-var osascript  = require('node-osascript');
-var Promise    = require('promise');
-var md5        = require('md5');
-var _          = require("underscore");
+// modules
+var osascript     = require('node-osascript');
+var Promise       = require('promise');
+var md5           = require('md5');
+var _             = require("underscore");
 
-var dictionary = require('../bibsync/dictionary')(require('./dictionary'));
-var db         = require('../bibsync/db').db;
+// config
+var dictionary    = require('../bibsync/dictionary')(require('./dictionary'));
+var config        = require('../../config');
+
+// datasource
+var datastore = config.datastore.instance; // TODO
+
+// load custom console
+var console = config.getConsole();
 
 /**
  * Given an event code, return the AppleScript command

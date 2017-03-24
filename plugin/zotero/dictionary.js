@@ -282,6 +282,7 @@ var fields_toLocal =
  * Map local to global types
  */
 var types_toGlobal = {
+  attachment : "attachment",
   audioRecording: 'audio',
   database: 'database',
   journalArticle: 'journalArticle',

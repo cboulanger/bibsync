@@ -3,50 +3,46 @@ var fs          = require('fs');
 var unzip       = require('unzip');
 var tempfile    = require('tempfile');
 var fstream     = require('fstream');
-var config      = require('../../config');
 
-// load custom console
-var console = config.getConsole();
+module.exports = function(sandbox){
 
-module.exports = {
+  var config       = sandbox.getConfig();
+  var console      = sandbox.getConsole();
 
-  /**
-   * Transfer binary file data from one storage to the other. Supports
-   * Zotero storage and WebDAV storage
-   * @param  {Object} info       Source and target information
-   * @param  {Zotero.Item} sourceItem An item of type "attachment"
-   * @param  {Zotero.Item} targetItem An item of type "attachment"
-   * @return {Promise}            A promise that resolves when the transfer is complete
-   */
-  transferFile : function( info, sourceItem, targetItem )
-  {
-    var that = this;
-    return new Promise(function(resolve,reject)
+  // API
+  return {
+
+    /**
+     * Transfer binary file data from one storage to the other. Supports
+     * Zotero storage and WebDAV storage
+     * @param  {Object} info       Source and target information
+     * @param  {Zotero.Item} sourceItem An item of type "attachment"
+     * @param  {Zotero.Item} targetItem An item of type "attachment"
+     * @return {Promise}            A promise that resolves when the transfer is complete
+     */
+    transferFile : function( info, sourceItem, targetItem )
     {
-      // console.log( "Source is " + (isWebDav(info.source) ? "WebDAV":"Zotero") + " storage");
-      // console.dir(sourceItem.apiObj.data);
-      // console.log( "Target is " + (isWebDav(info.target) ? "WebDAV":"Zotero") + " storage");
-      // console.dir(targetItem.apiObj.data);
-
+      var that = this;
+      //console.debug( "Source is " + (isWebDav(info.source) ? "WebDAV":"Zotero") + " storage");
+      //console.debug(sourceItem.apiObj.data);
+      //console.debug( "Target is " + (isWebDav(info.target) ? "WebDAV":"Zotero") + " storage");
+      //console.debug(targetItem.apiObj.data);
       // Check arguments
       if( ! (sourceItem instanceof Zotero.Item && targetItem instanceof Zotero.Item) ||
           sourceItem.get("itemType") !== "attachment" ||
           targetItem.get("itemType") !== "attachment"  ) {
-        reject(new Error("Arguments must be instances of Zotero.Item and of itemType 'attachment'.") );
+        throw new Error("Arguments must be instances of Zotero.Item and of itemType 'attachment'.");
       }
-
       console.log("Begin transfer of " + sourceItem.get("title"));
-
-      downloadItemFile()
+      // main procedure
+      return downloadItemFile()
       .then(checkDownload)
       .then(uploadItemFile)
       .then(registerUpload)
       .then( function(){
         console.log("Transfer of " + sourceItem.get("title") + " completed");
-        resolve();
-      })
-      .catch(reject);
-
+        return true;
+      });
 
       /**
        * Checks if library has a WebDAV storage
@@ -94,15 +90,13 @@ module.exports = {
        */
       function downloadItemFile()
       {
-        return new Promise(function(resolve,reject){
-          var filePath = tempfile(".tmp");
-          var fileName = sourceItem.get("filename");
-          var options = getRequestOptions( info.source, sourceItem );
-
-          if ( isWebDav(info.source) ){
-
-            console.debug("Streaming " + options.url + " to " + filePath);
-
+        var filePath = tempfile(".tmp");
+        var fileName = sourceItem.get("filename");
+        var options = getRequestOptions( info.source, sourceItem );
+        var found = false;
+        if ( isWebDav(info.source) ){
+          console.debug("Streaming " + options.url + " to " + filePath);
+          return new Promise(function(resolve,reject){
             request.get(options)
             .on("error", reject)
             .on('response', function(response) {
@@ -110,11 +104,9 @@ module.exports = {
                 case 404:
                 console.warn("Remote file does not exist.");
                 return resolve( null );
-
                 case 200:
                 console.debug("ZIP File found.");
                 return;
-
                 default:
                 console.warn("Got HTTP response " + response.statusCode + ": " + response.headers);
                 return;
@@ -122,34 +114,38 @@ module.exports = {
             })
             .pipe(unzip.Parse())
             .on("close", function(){
-              console.warn( fileName + " could not be found.");
-              resolve(null);
+              if( ! found ){
+                console.warn( fileName + " could not be found.");
+                resolve(null);
+              }
             })
             .on("error", function(error){
-              // ignore errors (for now)
               console.warn("Error during decompression: " + error);
               resolve(null);
             })
             .on("entry", function(entry){
               console.debug( "Found  " + entry.path );
               if (entry.path === fileName ) {
+                found = true;
                 console.debug( "Extracting ZIP file to temporary file ..." );
                 entry.pipe(fs.createWriteStream(filePath))
-                .on("error", reject)
+                .on("error", function(e){
+                  console.warn("Error writing extracted file to disk:" + e);
+                  resolve(null);
+                })
                 .on("close",function(){
                   console.debug( "Done extracting " + entry.path );
-                  return resolve(filePath);
+                  resolve(filePath);
                 });
               } else {
                 entry.autodrain();
               }
             });
-
-          } else {
-            console.log("TODO: Streaming normal file from Zotero server ...");
-            reject("Not implemented");
-          }
-        });
+          });
+        } else {
+          console.log("TODO: Streaming normal file from Zotero server ...");
+          throw new Error("Not implemented");
+        }
       }
 
       /**
@@ -160,8 +156,8 @@ module.exports = {
       function checkDownload(filePath)
       {
         if( filePath === null ){
-          console.warn("Aborted transfer of " + sourceItem.get("title") + " ===");
-          return resolve("Aborted");
+          console.warn("Aborted transfer of " + sourceItem.get("title") );
+          return Promise.resolve(false);
         } else {
           return Promise.resolve(filePath);
         }
@@ -210,13 +206,12 @@ module.exports = {
             } else if ( ! err ) {
               err = new Error( "HTTP Error Code " + response.statusCode + ": " + body );
             }
-            console.warn("" + err);
-            console.debug(options);
+            console.error("" + err);
+            //console.debug(options);
             reject(err);
           });
         });
       }
-
 
       /**
        * Uploads the file to the given storage
@@ -240,44 +235,35 @@ module.exports = {
         //   Common Responses
         //   201 Created	The file was successfully uploaded.
         //
-
-        return new Promise(function(resolve, reject)
-        {
-          if( isWebDav( info.target ) ) {
-
-            console.log("TODO: uploading zipped file to WebDAV server ...");
-            reject("Not implemented!");
-
-          } else {
-
-            getUploadAutorization(filePath)
-            .then(function(uploadConfig){
-
-              console.debug("Received upload authorization...");
-              //console.dir(uploadConfig);
-
-              // File is duplicate
-              if ( uploadConfig.exists ) {
-                console.log("File '" + sourceItem.get("filename") + "' already exists.");
-                return resolve(null);
+        if( isWebDav( info.target ) ) {
+          console.log("TODO: uploading zipped file to WebDAV server ...");
+          throw new Error("Not implemented!");
+        } else {
+          return getUploadAutorization(filePath)
+          .then(function(uploadConfig){
+            console.debug("Received upload authorization...");
+            //console.dir(uploadConfig);
+            // File is duplicate
+            if ( uploadConfig.exists ) {
+              console.log("File '" + sourceItem.get("filename") + "' already exists.");
+              return Promise.resolve(null);
+            }
+            function cleanupAndReject(err){
+              fs.unlinkSync(filePath);
+              throw new Error(err);
+            }
+            // Create WriteStream
+            var fileStat = fs.statSync(filePath);
+            var uploadSize = fileStat.size + uploadConfig.prefix.length + uploadConfig.suffix.length;
+            var options = {
+              url : uploadConfig.url,
+              headers : {
+                "Content-Type"   : uploadConfig.contentType,
+                "Content-Length" : uploadSize
               }
-
-              function cleanupAndReject(err){
-                fs.unlinkSync(filePath);
-                reject(err);
-              }
-
-              // Create WriteStream
-              var fileStat = fs.statSync(filePath);
-              var uploadSize = fileStat.size + uploadConfig.prefix.length + uploadConfig.suffix.length;
-              var options = {
-                url : uploadConfig.url,
-                headers : {
-                  "Content-Type"   : uploadConfig.contentType,
-                  "Content-Length" : uploadSize
-                }
-              };
-              var bytes = 0;
+            };
+            var bytes = 0;
+            return new Promise(function(resolve, reject){
               var writeStream = request.post(options)
               .on("error", cleanupAndReject )
               .on('response', function(response) {
@@ -287,13 +273,11 @@ module.exports = {
                   console.debug("Upload completed. Bytes written: " + bytes);
                   fs.unlinkSync(filePath);
                   return resolve(uploadConfig.uploadKey);
-
                   default:
                   err = "Http Error " + response.statusCode + ": " + response.headers;
                   cleanupAndReject( err );
                 }
               });
-
               // Create ReadStream and pipe into WriteStream
               var multiStream = require('multistream');
               var intoStream  = require('into-stream');
@@ -309,10 +293,9 @@ module.exports = {
                 //console.debug("Sent " +  bytes + " of " + uploadSize + " bytes of data.");
               })
               .pipe( writeStream );
-            })
-            .catch(reject);
-          }
-        });
+            });
+          });
+        }
       }
 
       /**
@@ -336,20 +319,19 @@ module.exports = {
         // 204 No Content	The upload was successfully registered.
         // 412 Precondition Failed	The file has changed remotely since
         // retrieval (i.e., the provided ETag no longer matches).
-        return new Promise(function(resolve, reject)
-        {
-          if( uploadKey === null ){
-            return resolve();
-          }
 
-          if( isWebDav( info.target ) ) {
-            console.debug("Registration of upload not neccessary for WebDAV storage.");
-            return resolve();
-          } else {
-            console.log("Registering upload with Zotero storage ...");
-            var options = getRequestOptions(info.target, targetItem );
-            options.form = { upload : uploadKey};
-            options.headers["If-None-Match"] = "*";
+        // file exists
+        if ( uploadKey === null ) return;
+
+        if( isWebDav( info.target ) ) {
+          console.debug("Registration of upload not neccessary for WebDAV storage.");
+          return;
+        } else {
+          console.log("Registering upload with Zotero storage ...");
+          var options = getRequestOptions(info.target, targetItem );
+          options.form = { upload : uploadKey};
+          options.headers["If-None-Match"] = "*";
+          return new Promise(function(resolve, reject){
             request.post(options,function(err, response, body){
               if ( err ) reject (err);
               switch( response.statusCode){
@@ -357,15 +339,14 @@ module.exports = {
                 case 204:
                 console.debug("Upload registered.");
                 return resolve();
-
                 default:
                 console.warn("HTTP Error " + response.statusCode + ": " + body );
                 resolve();
               }
-            }); // <== this level of nesting is annoying...
-          }
-        });
+            });
+          });
+        }
       }
-    });
-  }
+    }
+  };
 };

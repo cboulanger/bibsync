@@ -1,38 +1,18 @@
 var _         = require("underscore");
-var config    = require("../../config.js");
-
-// load custom console
-var console = config.getConsole();
 
 /**
- * Module
- * @type {Object}
+ * BibSync service methods
+ * @param  {Object} sandbox An object exposing the application API
+ * @return {Object} An object exposing the service methods
  */
-module.exports = (function(){
+module.exports = function(sandbox)
+{
 
-  /**
-   * Factory function that returns the function for the .catch() method
-   * of a promise
-   * @param  {Object}   res The express response object
-   * @return {Function} A function that sends a HTTP error response
-   */
-  function fail(res){
-    return function( error ){
-      console.warn(""+err);
-      res.status(500).send(""+err);
-    };
-  }
-
-  /**
-   * The available API objects
-   * @type {Object}
-   */
-  var enabledAPIs = {};
-  for (var key in config) {
-    if (config[key].enabled) {
-      enabledAPIs[key] = require("../" + key + "/api");
-    }
-  }
+  var console = sandbox.getConsole();
+  var config  = sandbox.getConfig();
+  var success = sandbox.success;
+  var fail    = sandbox.fail;
+  var enabledAPIs = sandbox.getEnabledApis();
 
   /**
    * In-memory cache
@@ -40,8 +20,8 @@ module.exports = (function(){
    */
   var cache = {};
 
-  // API
-  return {
+  // Services
+  var services = {
     /**
      * Return data on available libraries
      * /libraries
@@ -51,7 +31,7 @@ module.exports = (function(){
      */
     libraries: function(req, res) {
       var promises = [];
-      for (key in enabledAPIs) {
+      for (var key in enabledAPIs) {
         promises.push(enabledAPIs[key].getLibraries());
       }
       Promise.all(promises)
@@ -60,9 +40,7 @@ module.exports = (function(){
             return result.concat(current);
           }, []));
         })
-        .catch(function(err) {
-          res.status(500).send(err);
-        });
+        .catch(fail(res));
     },
 
 
@@ -108,11 +86,9 @@ module.exports = (function(){
     startSync: function(req, res) {
 
       var action = req.params.action;
-      var that = module.exports;
-
       console.debug("Sync action: " + action);
 
-      var info = that._getParameterObject(req);
+      var info = services._getParameterObject(req);
       if ( info === false ) {
         return res.json({
           responseAction : "error",
@@ -272,7 +248,7 @@ module.exports = (function(){
                 responseData   : "Collections have different names, continue?",
                 action         : "startSyncCollections"
               });
-            }
+            };
 
             // fallthrough if names match
 
@@ -431,21 +407,19 @@ module.exports = (function(){
      * @return {void}
      */
     copyFolder : function(req, res) {
-      var that = module.exports;
-      var info = that._getParameterObject(req);
+      var info = services._getParameterObject(req);
       var source = info.source;
       var target = info.target;
-
       //console.debug(info);
       if ( info === false ) {
         return res.status(400).send("Source and target are identical");
       }
-
       var sourceApi = enabledAPIs[source.application];
       var targetApi = enabledAPIs[target.application];
       if( ! sourceApi || ! targetApi ){
         return res.status(400).send("Invalid application");
       }
+      // TODO: show progress
       var targetCollectionKey = null;
       sourceApi.getCollection(source.type,source.id,source.collectionKey)
       .then(function(collection){
@@ -464,25 +438,21 @@ module.exports = (function(){
       })
       .then(function(items){
         console.debug("Creating copies in target collection...");
-        var p, promises = [];
-        items.forEach(function( itemData ){
-          itemData.info = JSON.stringify( info ); // TODO
-          if( source.application == target.application ){
-            p = targetApi.copyItem( target.type, target.id, itemData, targetCollectionKey );
-          } else {
-            p = targetApi.createItem( target.type, target.id, itemData, targetCollectionKey );
-          }
-          promises.push(p);
-        });
-        // return promises.reduce(function(previous,promise,index){
-        //   previous.then(function(){
-        //     console.log("+++++ Executing promise +++++ "+ index );
-        //     return promise;
-        //   });
-        // }, Promise.resolve());
-        return Promise.all(promises);
+        // serially iterate over data using promise-returning functions and array.prototype.reduce:
+        // http://taoofcode.net/promise-anti-patterns/
+        return items.reduce(function( promise, itemData, index ){
+          return promise.then(function(){
+            itemData.info = JSON.stringify( info ); // TODO: info should be passed as parameter, this requires changeing the REST API as well
+            if( source.application == target.application ){
+              return targetApi.copyItem( target.type, target.id, itemData, targetCollectionKey );
+            } else {
+              return targetApi.createItem( target.type, target.id, itemData, targetCollectionKey );
+            }
+          });
+        }, Promise.resolve());
       })
       .then(function(){
+        // hide popup
         console.debug("Done.");
         res.status(200).send();
       })
@@ -492,4 +462,5 @@ module.exports = (function(){
       });
     }
   };
-})();
+  return services;
+};

@@ -5,3 +5,9 @@
 	path = lib/qooxdoo-5.0
 	url = git://github.com/qooxdoo/qooxdoo.git
 	branch = branch_5_0_x
+[submodule "qx-contrib-Dialog"]
+	path = qx-contrib-Dialog
+	url = git://github.com/cboulanger/qx-contrib-Dialog.git
+[submodule "libZoteroJS"]
+	path = libZoteroJS
+	url = git://github.com/cboulanger/libZoteroJS.git

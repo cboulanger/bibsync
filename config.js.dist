@@ -31,14 +31,5 @@ module.exports = {
       logFilter:              ['LOG','DEBUG'],  // Examples: Filter these types to not log to file
       colors:                 false                     // do we want pretty pony colors in our console output?
     }
-  },
-
-  /**
-   * Plugin your favorite console object which includes a debug() and info() method
-   * @return {Object} An object with the methods log(), warn(), info(), debug()
-   */
-  getConsole : function(){
-    var Debug = require('console-debug');
-    return new Debug(this.console[this.general.mode]);
   }
 };

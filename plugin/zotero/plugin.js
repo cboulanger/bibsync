@@ -1,37 +1,37 @@
-// modules
-var service   = require("./services");
-
-// configuration
-var config    = require("../../config.js");
-
-// load custom console
-var console = config.getConsole();
-
+/**
+ * Zotero plugin
+ * @param  {Function} done Callback function to be called when plugin
+ * is configured.
+ * @return {void}
+ */
 module.exports = function zotero(bibsync, done)
 {
+  var sandbox   = bibsync;
+  var console   = sandbox.getConsole();
+  var router    = sandbox.getRouter();
+  var services  = require("./services")(sandbox);
 
-  var app = bibsync.getRouter();
-
-  app.get('/zotero/libraries', service.libraries);
+  /*
+    zotero services
+   */
+  // libraries
+  router.get('/zotero/libraries', services.libraries);
 
   // collections
-  app.get('/zotero/:type/:id/collections/flat', service.collectionsFlat);
-  app.get('/zotero/:type/:id/collections/tree', service.collectionsTree);
-
-  app.get('/zotero/:type/:id/collections/:collection/ids', service.collectionIds );
-  app.get('/zotero/:type/:id/collections/:collection/summary', service.collectionItemsSummary );
-
-  app.get('/zotero/:type/:id/collections/:collection/items', service.collectionItems );
-
-  app.delete('/zotero/:type/:id/collections/:collection/items', service.collectionItems );
+  router.get('/zotero/:type/:id/collections/flat', services.collectionsFlat);
+  router.get('/zotero/:type/:id/collections/tree', services.collectionsTree);
+  router.get('/zotero/:type/:id/collections/:collection/ids', services.collectionIds );
+  router.get('/zotero/:type/:id/collections/:collection/summary', services.collectionItemsSummary );
+  router.get('/zotero/:type/:id/collections/:collection/items', services.collectionItems );
+  router.delete('/zotero/:type/:id/collections/:collection/items', services.collectionItems );
 
   // items
-  //app.get('/zotero/:type/:id/items/:ids', service.items );
-  app.post('/zotero/:type/:id/items', service.createItem );
-  app.put('/zotero/:type/:id/items', service.copyItem );
-  app.patch('/zotero/:type/:id/items', service.updateItem );
-  app.delete('/zotero/:type/:id/collections/:collectionKey/items', service.updateItem );
-  //app.get('/zotero/:type/:id/item/:itemId', service.getItem );
+  //router.get('/zotero/:type/:id/items/:ids', service.items );
+  router.post('/zotero/:type/:id/items', services.createItem );
+  router.put('/zotero/:type/:id/items', services.copyItem );
+  router.patch('/zotero/:type/:id/items', services.updateItem );
+  router.delete('/zotero/:type/:id/collections/:collectionKey/items', services.updateItem );
+  //router.get('/zotero/:type/:id/item/:itemId', service.getItem );
 
   console.debug('Loaded Zotero plugin.');
   done(null,this);

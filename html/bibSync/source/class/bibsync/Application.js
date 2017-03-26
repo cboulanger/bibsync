@@ -8,6 +8,24 @@
 qx.Class.define("bibsync.Application", {
   extend: qx.application.Standalone,
 
+  /*
+   *****************************************************************************
+   PROPERTIES
+   *****************************************************************************
+   */
+  properties : {
+    progressWidget : {
+      check    : "dialog.Progress",
+      init     : null,
+      nullable : false
+    }
+  },
+
+  /*
+   *****************************************************************************
+   MEMBERS
+   *****************************************************************************
+   */
   members: {
 
     // simple properties
@@ -40,6 +58,18 @@ qx.Class.define("bibsync.Application", {
      * @return {void}
      */
     setupUI: function() {
+
+      var progressWidget = new dialog.Progress();
+      this.setProgressWidget(progressWidget);
+      var socket = io();
+      socket.on("progress.show",function(m){
+        if ( m ){
+          progressWidget.set(m).show();
+        } else {
+          progressWidget.hide();
+        }
+      });
+
       // render main layout
       // todo - use loadForm() instead?
       qookery.contexts.Qookery.loadResource("bibsync/forms/application.xml", this, function(xmlSource) {
@@ -112,7 +142,7 @@ qx.Class.define("bibsync.Application", {
           updateItem : {
             method: "PATCH",
             url: "/{application}/{type}/{id}/items"
-          },
+          }
         });
         resource.addListener("error",function(e){
           qx.core.Init.getApplication().getRoot().setEnabled(true);
@@ -186,6 +216,9 @@ qx.Class.define("bibsync.Application", {
         showTopLevelOpenCloseIcons : true
       });
       leftTreeStore.bind("model[0]", leftTree, "model");
+      leftTree.getSelection().addListener("change", function(){
+        this.loadTable("left");
+      },this);
 
       var rightTreeStore = new qx.data.store.Rest(this.getRestResource("rightTree"), "getTreeData");
       var rightTree = this.getForm().getComponent("rightTree").getMainWidget();
@@ -196,6 +229,9 @@ qx.Class.define("bibsync.Application", {
         showTopLevelOpenCloseIcons : true
       });
       rightTreeStore.bind("model[0]", rightTree, "model");
+      rightTree.getSelection().addListener("change", function(){
+        this.loadTable("right");
+      },this);
 
       // setup table databinding in main window
       var leftTableStore = new qx.data.store.Rest(this.getRestResource("leftTable"), "getTableData");
@@ -219,13 +255,34 @@ qx.Class.define("bibsync.Application", {
      * @param  {String} prefix The id of the component is prefix + "SelectBox"
      * @return {void}
      */
-    loadTree: function(prefix) {
-      var selection = this.getForm().getComponent(prefix + "SelectBox").getMainWidget().getModelSelection();
-      if (selection.getLength() === 0) return;
-      var libraryId = selection.getItem(0).getId();
-      var appName   = selection.getItem(0).getApplication();
-      var type      = selection.getItem(0).getType() == "user" ? "user" : "group";
-      this.getRestResource(prefix + "Tree").getTreeData({
+    loadTree: function( prefix, selectKey ) {
+      var selectBox = this.getForm().getComponent(prefix + "SelectBox").getMainWidget();
+      var selection = selectBox.getModelSelection();
+      if ( selection.getLength() === 0 ) return;
+      var libraryId    = selection.getItem(0).getId();
+      var appName      = selection.getItem(0).getApplication();
+      var type         = selection.getItem(0).getType() == "user" ? "user" : "group";
+      var treeResource = this.getRestResource(prefix + "Tree");
+      var treeWidget   = this.getForm().getComponent(prefix + "Tree").getMainWidget();
+      treeResource.addListenerOnce("getTreeDataSuccess",function(e){
+        if ( selectKey ){
+          console.log("Selecting folder with key " + selectKey);
+          treeWidget.resetSelection();
+          // traverse object tree
+          (function recursiveSearch(qxDataArr){
+            qxDataArr.forEach(function(modelItem){
+              if ( modelItem.getKey() == selectKey ){
+                treeWidget.getSelection().push(modelItem);
+                treeWidget.openNodeAndParents(modelItem);
+              }
+              if ( modelItem.getChildren().getLength() ){
+                recursiveSearch( modelItem.getChildren() );
+              }
+            });
+          })(treeWidget.getModel().getChildren());
+        }
+      },this);
+      treeResource.getTreeData({
         type: type,
         id: libraryId,
         application: appName
@@ -241,8 +298,8 @@ qx.Class.define("bibsync.Application", {
     getCollectionInfo : function(prefix){
       var librarySelection = this.getForm().getComponent(prefix + "SelectBox").getMainWidget().getModelSelection();
       if( librarySelection.getLength() === 0) return null;
-      var treeSelection = this.getForm().getComponent(prefix + "Tree").getMainWidget().getSelection();
       var table = this.getForm().getComponent(prefix + "Table").getMainWidget();
+      var treeSelection = this.getForm().getComponent(prefix + "Tree").getMainWidget().getSelection();;
       if (treeSelection.getLength() === 0) return null;
       return {
         application   : librarySelection.getItem(0).getApplication(),
@@ -463,7 +520,7 @@ qx.Class.define("bibsync.Application", {
         if( ! confirm(msg) ) return;
       }
 
-      component = this.__synopsisComponent;
+      var component = this.__synopsisComponent;
       var tableModel = component.getComponent("mergedItem").getTableModel();
       var model  = component.getModel();
       var items  = model.getItems();
@@ -518,7 +575,7 @@ qx.Class.define("bibsync.Application", {
            rest.invoke(serverAction,{
              application : target.getApplication(),
              type : target.getType(),
-             id : target.getId(),
+             id : target.getId()
            },data);
          }
          break;
@@ -535,6 +592,13 @@ qx.Class.define("bibsync.Application", {
       }
     },
 
+    /**
+     * Copies a folder and its contents as a subfolder of the currently selected
+     * target folder
+     * @param  {String} source [description]
+     * @param  {String} target [description]
+     * @return {void}          [description]
+     */
     copyFolder : function( source, target )
     {
       var msg = "This will copy the folder and its content selected in the left "+
@@ -557,6 +621,9 @@ qx.Class.define("bibsync.Application", {
         targetCollectionKey : info.target.collectionKey
       };
       var rest = this.getRestResource("copy");
+      rest.addListenerOnce("copySuccess",function(){
+        this.loadTree( target, info.target.collectionKey );
+      },this);
       rest.copy(params);
     }
 

@@ -27,16 +27,10 @@
 
     <composite column-flexes="1" row-flexes="1">
         <virtual-tree id="leftTree" flex="1" row-flexes="1" label="%none">
-            <script event="changeSelection">
-                $.Qookery.getService("app").loadTable("left");
-            </script>
         </virtual-tree>
     </composite>
     <composite column-flexes="1" row-flexes="1">
         <virtual-tree id="rightTree" row-flexes="1" label="%none">
-            <script event="changeSelection">
-                $.Qookery.getService("app").loadTable("right");
-            </script>
         </virtual-tree>
     </composite>
     <composite column-flexes="1" row-flexes="1" min-width="500">

@@ -14,6 +14,3 @@ Used Open Source Software:
 - qooxdoo (http://www.qooxdoo.org)
 - qookery (http://www.qookery.org)
 - NodeJs & Express
-
-
-https://medium.com/@paul_irish/debugging-node-js-nightlies-with-chrome-devtools-7c4a1b95ae27#.9mjephwdq

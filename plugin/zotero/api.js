@@ -4,6 +4,7 @@ var Promise     = require('promise');
 var JsonClient  = require('json-client');
 var request     = require('request');
 var _           = require('underscore');
+var mime        = require('mime');
 
 /**
  * Zotero API
@@ -140,27 +141,23 @@ module.exports = function(sandbox)
      */
     getCollections: function(type, libraryId) {
       console.debug('zotero::getCollections(' + [type, libraryId].join(',') + ')');
-      var that = this;
-      return new Promise(function(resolve, reject) { // TODO Superflous Promise
-        var library = that.getLibrary(type, libraryId);
-        console.debug("Loading updated collections from server...");
-        library.loadUpdatedCollections()
-        .then(function(result) {
-          var collectionObjects = library.collections.collectionObjects;
-          var collections = {};
-          var colllection;
-          for (var key in collectionObjects) {
-            colllection = library.collections.getCollection(key);
-            collections[key] = {
-              key: key,
-              name: colllection.apiObj.data.name,
-              parentKey: colllection.apiObj.data.parentCollection
-            };
-          }
-          cache.treeData[type + libraryId] = collections;
-          resolve(collections);
-        })
-        .catch(reject);
+      console.debug("Loading updated collections from server...");
+      var library = this.getLibrary(type, libraryId);
+      return library.loadUpdatedCollections()
+      .then(function(result) {
+        var collectionObjects = library.collections.collectionObjects;
+        var collections = {};
+        var colllection;
+        for (var key in collectionObjects) {
+          colllection = library.collections.getCollection(key);
+          collections[key] = {
+            key: key,
+            name: colllection.apiObj.data.name,
+            parentKey: colllection.apiObj.data.parentCollection
+          };
+        }
+        cache.treeData[type + libraryId] = collections;
+        return collections;
       });
     },
 
@@ -173,25 +170,21 @@ module.exports = function(sandbox)
      */
     getCollection: function(type, libraryId, collectionKey) {
       console.debug("zotero::getCollection(" + [type, libraryId, collectionKey].join(",") + ")");
-      var that = this;
       var cachedCollections = cache.treeData[type + libraryId];
       var isCached = _.isObject( cachedCollections ) &&
                      _.isObject( cachedCollections[collectionKey] );
-      return new Promise(function(resolve, reject) { // TODO Superflous Promise
-        if ( false /*isCached*/ ) {
-          resolve( cachedCollections[collectionKey] );
-        } else {
-          console.debug("No cached collections. Need to get them from server.");
-          that.getCollections(type, libraryId)
-          .then(function(collections) {
-            // if( collections === undefined ){
-            //   reject("Houston, there is a problem");
-            // }
-            resolve(collections[collectionKey]);
-          })
-          .catch(reject);
-        }
-      });
+      if ( false /*isCached*/ ) {
+        return Promise.resolve( cachedCollections[collectionKey] );
+      } else {
+        console.debug("No cached collections. Need to get them from server.");
+        return this.getCollections(type, libraryId)
+        .then(function(collections) {
+          // if( collections === undefined ){
+          //   reject("Houston, there is a problem");
+          // }
+          return collections[collectionKey];
+        });
+      }
     },
 
     /**
@@ -220,16 +213,8 @@ module.exports = function(sandbox)
      */
     getCollectionIDs: function(type, libraryId, collectionKey) {
       console.log("zotero::getCollectionIDs(" + [type, libraryId, collectionKey].join(",") + ")");
-      var that = this;
-      return new Promise(function(resolve, reject) { // TODO Superflous Promise
-        var library = that.getLibrary(type, libraryId);
-        library.collections.getCollection(collectionKey).getMemberItemKeys()
-        .then(function(ids) {
-          resolve(ids);
-        })
-        .catch(reject);
-      });
-
+      var library = this.getLibrary(type, libraryId);
+      return library.collections.getCollection(collectionKey).getMemberItemKeys();
     },
 
     /**
@@ -243,7 +228,6 @@ module.exports = function(sandbox)
      */
     getCollectionChildKeysSync: function(type, libraryId, collectionKey) {
       console.debug("zotero::getCollectionChildKeysSync(" + [type, libraryId, collectionKey].join(",") + ")");
-
       if (!cache.treeData[type + libraryId]) {
         throw new Error("No cached data available");
       }
@@ -265,7 +249,6 @@ module.exports = function(sandbox)
       return true;
     },
 
-
     /**
      * Adds a collection.
      * @param {String} type The type of library
@@ -286,11 +269,9 @@ module.exports = function(sandbox)
       return that.getLibrary(type, libraryId).collections
       .writeCollections([collection])
       .then(function(result) {
-        var newCollectionKey = result[0].returnCollections[0].get("key");
+        var newCollectionKey = result[0].returnCollections[0].get("key"); // TODO
         return newCollectionKey;
-      })
-      .catch(Promise.reject);
-      //});
+      });
     },
 
     /**
@@ -324,84 +305,73 @@ module.exports = function(sandbox)
      */
     getCollectionItems: function(libraryType, libraryId, collectionKey, fields) {
       console.debug("zotero::getCollectionItems(" + [libraryType, libraryId, collectionKey].join(",") + ")");
-      var that = this;
-      return new Promise(function(resolve, reject) { // TODO: uneccessary promise!
-        var result = [];
-        that.getLibrary(libraryType, libraryId)
-        .loadItems({
-          collectionKey: collectionKey
-        })
-        .then(function(data) {
-          if( ! ( data && _.isObject(data) && _.isArray(data.loadedItems) ) ){
-            console.warn("Collection does not exist.");
-            reject("Collection does not exist.");
+      // closure variable that holds the final result array
+      var result = [];
+      return this.getLibrary(libraryType, libraryId)
+      .loadItems({
+        collectionKey: collectionKey
+      })
+      .then(function(data) {
+        if( ! ( data && _.isObject(data) && _.isArray(data.loadedItems) ) ){
+          throw new Error("Collection does not exist.");
+        }
+        //console.debug(data.loadedItems);
+        var promises = [];
+        // iterate over items, TODO put this into own function
+        data.loadedItems.forEach(function(item) {
+          var globalItem = _.omit(dictionary.translateToGlobal(item.apiObj.data), function(value) {
+            return !value;
+          });
+          if (_.isArray(fields) && fields.length) {
+            globalItem = _.pick(globalItem, fields);
+          }
+          if (globalItem.itemType == "attachment") {
+            console.warn("Skipping '" + globalItem.title + "' - item type 'attachment' currently not supported. ");
             return;
           }
-          //console.debug(data.loadedItems);
-          var promises = [];
-          // iterate over items
-          data.loadedItems.forEach(function(item) {
-            // THIS MUST GO INTO SEPARATE FUNCTION!!!!
-            var globalItem = _.omit(dictionary.translateToGlobal(item.apiObj.data), function(value) {
-              return !value;
+          // add type if missing
+          if (!globalItem.itemType) {
+            globalItem.itemType = dictionary.getGlobalContent("itemType", item.apiObj.data);
+          }
+          // add itemUri
+          globalItem.itemUri = item.apiObj.links.self.href;
+          // add special fields if requested
+          if (_.isArray(fields) && fields.length) {
+            if (fields.indexOf("creatorSummary") !== -1) {
+              globalItem.creatorSummary = item.get("creatorSummary");
+            }
+            // add year if requested
+            if (fields.indexOf("year") !== -1) {
+              globalItem.year = item.get("year");
+            }
+          }
+          // children
+          var doInspectChildren = _.isArray(fields) ? _.intersection(fields, ["attachments", "notes"]).length : true;
+          if (doInspectChildren) {
+            var parentItem = globalItem;
+            var p = item.getChildren(item.owningLibrary)
+            .then(function(childItems) {
+              //console.log("Item child count:" + childItems.length);
+              childItems.forEach(function(childItem) {
+                switch (childItem.get("itemType")) {
+                  case "attachment":
+                  var filename = childItem.get("filename");
+                  parentItem.attachments =
+                    (parentItem.attachments ? parentItem.attachments.split(/;/) : [])
+                    .concat(filename).join(";");
+                  break;
+                }
+              });
             });
-            if (_.isArray(fields) && fields.length) {
-              globalItem = _.pick(globalItem, fields);
-            }
-            if (globalItem.itemType == "attachment") {
-              console.warn("Skipping '" + globalItem.title + "' - item type 'attachment' currently not supported. ");
-              return;
-            }
-            // add type if missing
-            if (!globalItem.itemType) {
-              globalItem.itemType = dictionary.getGlobalContent("itemType", item.apiObj.data);
-            }
-            // add itemUri
-            globalItem.itemUri = item.apiObj.links.self.href;
-            // add special fields if requested
-            if (_.isArray(fields) && fields.length) {
-              if (fields.indexOf("creatorSummary") !== -1) {
-                globalItem.creatorSummary = item.get("creatorSummary");
-              }
-              // add year if requested
-              if (fields.indexOf("year") !== -1) {
-                globalItem.year = item.get("year");
-              }
-            }
-            // children
-            var doInspectChildren = _.isArray(fields) ? _.intersection(fields, ["attachments", "notes"]).length : true;
-            if (doInspectChildren) {
-              var parentItem = globalItem;
-              var p = new Promise(function(resolve, reject) {
-
-                item.getChildren(item.owningLibrary)
-                  .then(function(childItems) {
-                    //console.log("Item child count:" + childItems.length);
-                    childItems.forEach(function(childItem) {
-                      switch (childItem.get("itemType")) {
-                        case "attachment":
-                        var filename = childItem.get("filename");
-                        parentItem.attachments =
-                          (parentItem.attachments ? parentItem.attachments.split(/;/) : [])
-                          .concat(filename).join(";");
-                        break;
-                      }
-                    });
-                    // all children inspected
-                    resolve();
-                  }).catch(reject);
-              }).catch(reject);
-              promises.push(p);
-            }
-            result.push(globalItem);
-          });
-          // resolve when all child items have been inspected
-          return Promise.all(promises);
-        })
-        .then(function() {
-          resolve(result);
-        })
-        .catch(reject);
+            promises.push(p);
+          }
+          result.push(globalItem);
+        });
+        // resolve when all child items have been inspected
+        return Promise.all(promises);
+      })
+      .then(function(){
+        return result;
       });
     },
 
@@ -530,46 +500,101 @@ module.exports = function(sandbox)
           delete itemData.collections;
           var data = dictionary.translateToLocal(itemData);
           var library = that.getLibrary(libraryType, libraryId);
-          var item = new Zotero.Item();
-          item.associateWithLibrary(library);
-          return item.initEmpty(data.itemType)
-          .then(function(item) {
+
+          // variables set or updated in the closures // TODO this is clumsy
+          var targetItem = new Zotero.Item();
+          var sourceAttachmentItems = [];
+
+          targetItem.associateWithLibrary(library);
+          return targetItem.initEmpty(data.itemType)
+          .then(function(targetItem) {
             // collection
-            item.addToCollection(targetCollectionKey);
+            targetItem.addToCollection(targetCollectionKey);
+            // set properties
+            for (var key in data) {
+              targetItem.set(key, data[key]);
+            }
             // notes
             if (data.notes) {
               console.debug("Create notes ....");
               var childNote1 = new Zotero.Item();
               childNote1.initEmptyNote();
               childNote1.set('note', data.notes);
-              item.notes = [childNote1];
+              targetItem.notes = [childNote1];
               delete data.notes;
             }
             // attachments
-            if (itemData.attachments) { // TODO: implement adding of attachments
+            var childItemPromises = [];
+            if (itemData.attachments) {
               console.debug("Create attachments ...");
+              targetItem.attachments = [];
               itemData.attachments.split(";").forEach(function(filename) {
-                console.debug("TODO: Not adding attachment " + filename);
+                console.log("Adding file attachment " + filename );
+                // target child
+                var targetAttachmentItem = new Zotero.Item();
+                var p1 = targetAttachmentItem.initEmpty('attachment', "imported_file")
+                .then(function(t) {
+                  t.set('title',filename);
+                  t.set('filename', filename);
+                  t.set('contentType', mime.lookup(filename) );
+                  t.associateWithLibrary(targetLibrary);
+                  targetItem.attachments.push(t);
+                  sourceAttachmentItems.push(t);
+                });
+                childItemPromises.push(p1);
+                // "fake" source child
+                var sourceAttachmentItem = new Zotero.Item();
+                var p2 = sourceAttachmentItem.initEmpty('attachment', "imported_file")
+                .then(function(s) {
+                  s.set('title',filename);
+                  s.set('filename',filename);
+                  sourceAttachmentItems.push(s);
+                });
+                childItemPromises.push(p2);
               }, this);
             }
-            // set properties
-            for (var key in data) {
-              item.set(key, data[key]);
-            }
             // write it to zotero server
-            return item.writeItem();
+            console.debug("Writing item and children to server ...");
+            return Promise.all(childItemPromises).then(function(){
+              //console.debug("Done.");
+              return targetItem.writeItem();
+            })
+            .catch(function(err){
+              console.error("Error writing to the server:" + err);
+              throw err;
+            });
           })
           .then(getItemFromWriteResult)
           //.then(debugResult)
-          .then(function saveLink(targetItem) {
-            targetItemKey = targetItem.get("key");
-            return sandbox.getDatastore().saveLink(
-              sourceLibUri, sourceItemKey,
-              targetLibUri, targetItemKey
-            );
+          .then(function(item){
+            if( ! ( item instanceof Zotero.Item ) ) throw new Error("Error writing item to disk"); // TODO move into check function
+            targetItemKey = item.get("key");
+            console.debug("Target item has been written to the server with key " + targetItemKey + ". Reloading...");
+            return targetLibrary.loadItem(targetItemKey);
           })
-          .then(function(){
-            return targetItemKey;
+          .then(function(item){
+            targetItem = item;
+            console.debug("Reading created child items to initiate file transfer...");
+            return targetItem.getChildren(targetLibrary);
+          })
+          .then(function(targetChildItems){
+             console.debug("Number of target item children: " + targetChildItems.length);
+             if( targetChildItems.length > 0 )
+             {
+                return attachmentManager.copyAttachmentFiles(info,sourceAttachmentItems,targetChildItems);
+             }
+             return false;
+          })
+          .then(function(success) {
+            // TODO passing success around is not good, use exceptions!
+            return success ?
+              sandbox.getDatastore().saveLink(
+                sourceLibUri, sourceItemKey,
+                targetLibUri, targetItemKey
+              ) : false;
+          })
+          .then(function(success){
+            return success ? targetItemKey : false;
           });
         }
       });
@@ -630,7 +655,7 @@ module.exports = function(sandbox)
           .then(configureAndWriteTargetItem)
           .then(reloadTargetItem)
           .then(loadTargetChildItems)
-          .then(configureAttachments)
+          .then(copyAttachmentFiles)
           .then(saveLink)
           .then(function() {
             console.debug("Done.");
@@ -711,7 +736,6 @@ module.exports = function(sandbox)
         return item;
       }
 
-
       /**
        * Creates copies of child items. Implemented so far:
        *  - file attachments
@@ -742,8 +766,8 @@ module.exports = function(sandbox)
             case "attachment/imported_file":
             case "attachment/imported_url":
               // TODO: Implement
-              if (childItem.get("title").search(/snapshot/i) >-1 ) {
-                console.log("Skipping " + childItem.get("title"));
+              if (childItem.get("filename").search(/\.pdf/i) ==-1 ) {
+                console.log("Currently, only PDF attachments are supported. Skipping " + childItem.get("title"));
                 return;
               }
               console.log("Adding file attachment " + childItem.get("title"));
@@ -800,7 +824,7 @@ module.exports = function(sandbox)
 
       /**
        * Load the children of the given item and return them. This also assigns
-       * the passed item to the targetItem closure variable
+       * the passed item to the targetItem closure variable.
        * @param  {Zotero.Item} item The
        * @return {Promise} A Promise that resolves with an array containing
        * instances of Zotero.Item
@@ -813,69 +837,23 @@ module.exports = function(sandbox)
         return targetItem.getChildren(targetLibrary);
       }
 
-
       /**
-       * Configures the child attachments of the target item after they
-       * have been saved on the server. Calls module that transfers the
-       * files connected with the attachment items
-       * @return {Promise}      A promise that resolves when all the child items
-       *                        have been configured
+       * Copies the actual attachment files
+       * @param  {Zotero.Item[]} targetChildItems An array of Zotero.Item objects.
+       * consisting of the children of the target item.
+       * @return {Promise} A promise that resolves with a Boolean, true if successfully
+       * false if there was an error.
        */
-      function configureAttachments(targetChildItems) {
-        if(targetChildItems===false){
-          return false;
-        }
-        console.debug("Configuring attachments ...");
-        if( targetChildItems.length === 0 ){
-          console.debug("No child attachments.");
-          return Promise.resolve();
-        }
-        return targetChildItems.reduce(function( promise, targetChildItem, index ){
-          var itemType = targetChildItem.get("itemType");
-          var linkMode = targetChildItem.get("linkMode");
-          var extendedItemType = itemType + (linkMode ? "/" + linkMode : "");
-          switch (extendedItemType) {
-            case "attachment/imported_file":
-            case "attachment/imported_url":
-            return promise.then(function(){
-              console.debug( "Writing attachment "+targetChildItem.get("title") );
-              var sourceAttachmentItem = sourceAttachmentItems[index];
-              ["note", "tags", "md5", "mtime"].forEach(function(key) {
-                targetChildItem.set(key, sourceAttachmentItem.get(key));
-              });
-              var href = ["https://api.zotero.org", info.source.type, info.source.id,
-                "items", sourceAttachmentItem.get("key")].join("/");
-              targetChildItem.set('relations', {
-                "owl:sameAs": href
-              });
-              return targetChildItem.writeItem()
-              .then(getItemFromWriteResult)
-              .then(function(item){
-                if( item ){
-                  console.debug("Attachment item written to server, key is " + item.get("key") );
-                  return attachmentManager.transferFile(info, sourceAttachmentItem, item )
-                  .then(function(success){
-                    if (success) {
-                      console.debug("Attachment sucessfully transferred.");
-                    } else {
-                      console.debug("Problem transferring the attachment.");
-                    }
-                    return Promise.resolve();
-                  });
-                } else {
-                  console.warn("Problem writing child item to server");
-                  return Promise.resolve();
-                }
-              });
-            });
-            default:
-            console.debug("Ignoring attachment " + targetChildItem.get("title") );
-            return Promise.resolve();
-          }
-
-        }, Promise.resolve());
+      function copyAttachmentFiles(targetChildItems)
+      {
+        return attachmentManager.copyAttachmentFiles(info,sourceAttachmentItems,targetChildItems);
       }
 
+      /**
+       * Saves the link between source and target
+       * @param  {Boolean} result Success
+       * @return {[type]}        [description]
+       */
       function saveLink(result) {
         if(result===false){
           return false;

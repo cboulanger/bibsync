@@ -2,7 +2,7 @@
 <form xmlns="http://www.qookery.org/ns/Form"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="../../../../../../lib/qookery/qookery/docs/form.xsd"
-  column-count="2" column-flexes="1 1" row-flexes="0 9 0 0" margin="10">
+  column-count="2" column-flexes="1 1" row-flexes="0 9 0 0" margin="10" id="main">
 
     <import class="qookery.contexts.Qookery"/>
 
@@ -70,6 +70,11 @@
         <button label="Manual sync ←" id="btnCopyRightLeft" enabled="true">
             <script event="execute">
                 $.Qookery.getService("app").sync("right", "left");
+            </script>
+        </button>
+        <button label="Run test" id="btnRunTest" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").runTest();
             </script>
         </button>
     </composite>

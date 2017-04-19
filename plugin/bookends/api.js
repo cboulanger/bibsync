@@ -419,12 +419,13 @@ module.exports = function(sandbox)
           var fieldName = "";
           taggedData.split(/\r/).map(function(line) {
             var i = line.indexOf(":");
-            var maybeFieldName = line.substring(0, i);
+            var maybeFieldName = i > 0 ? line.substring(0, i) : "";
             if ( dictionary.isLocalField(maybeFieldName) ) {
               fieldName = maybeFieldName;
               dict[fieldName] = line.substring(i + 2);
-            } else if (fieldName && maybeFieldName === undefined) {
-              if (line.length > 0 || fieldName == "abstract" || fieldName == "notes") {
+            } else if (fieldName && ! maybeFieldName ) {
+              // append to current mulit-line field
+              if ( fieldName == "abstract" || fieldName == "notes") {
                 dict[fieldName] += "\n" + line;
               }
             }

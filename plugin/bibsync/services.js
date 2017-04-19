@@ -400,14 +400,10 @@ module.exports = function(sandbox)
 
     /**
      * Copy one folder and its contents as a subfolder of another folder
-     * /copy/:sourceApplication/:sourceType/:sourceId/:sourceCollectionKey/
-     *    to/:targetApplication/:targetType/:targetId/:targetCollectionKey/
-     * @param  {Object} req Express request Object
-     * @param  {Object} res Express response Object
-     * @return {void}
+     * @param  {Object} info An object containing all information
+     * @return {Promise}
      */
-    copyFolder : function(req, res) {
-      var info = services._getParameterObject(req);
+    copyFolder : function(info) {
       var source = info.source;
       var target = info.target;
       //console.debug(info);
@@ -417,11 +413,11 @@ module.exports = function(sandbox)
       var sourceApi = enabledAPIs[source.application];
       var targetApi = enabledAPIs[target.application];
       if( ! sourceApi || ! targetApi ){
-        return res.status(400).send("Invalid application");
+        return Promise.reject(new Error("Invalid application"));
       }
-      // TODO: show progress
+      sandbox.showProgress(0,"Assembling information...");
       var targetCollectionKey = null;
-      sourceApi.getCollection(source.type,source.id,source.collectionKey)
+      return sourceApi.getCollection(source.type,source.id,source.collectionKey)
       .then(function(collection){
         var data = {
           name      : collection.name,
@@ -440,8 +436,14 @@ module.exports = function(sandbox)
         console.debug("Creating copies in target collection...");
         // serially iterate over data using promise-returning functions and array.prototype.reduce:
         // http://taoofcode.net/promise-anti-patterns/
+        var numItems = items.length;
         return items.reduce(function( promise, itemData, index ){
           return promise.then(function(){
+            sandbox.showProgress(
+              (index/numItems)*100,
+              "Copying " + (index+1) + " of " + numItems + " items.",
+              itemData.title
+            );
             itemData.info = JSON.stringify( info ); // TODO: info should be passed as parameter, this requires changeing the REST API as well
             if( source.application == target.application ){
               return targetApi.copyItem( target.type, target.id, itemData, targetCollectionKey );
@@ -452,15 +454,59 @@ module.exports = function(sandbox)
         }, Promise.resolve());
       })
       .then(function(){
-        // hide popup
+        sandbox.hideProgress();
+        sandbox.hideProgress();
         console.debug("Done.");
-        res.status(200).send();
       })
       .catch(function(err){
+        sandbox.hideProgress();
+        sandbox.hideProgress();
         console.error(""+err);
-        res.status(500).send(""+err);
       });
+    },
+
+    /**
+     * TESTs
+     * @type {Object}
+     */
+    test : function(){
+
+      ///zotero/group/984485/items
+      var info = {
+        "source": {
+          "application": "bookends",
+          "id": 0,
+          "type": "user",
+          "collectionKey": "1b7185cec28a1e20e33f5f3ad0f02081"
+        },
+        "target": {
+          "application": "zotero",
+          "id": 984485,
+          "type": "group",
+          "collectionKey": "3VKSCZXV"
+        }
+      };
+      var itemData = {
+        itemType:"bookSection",
+        authors:"Luhmann, Niklas",
+        title:"Positives Recht und Ideologie",
+        bookTitle:"Soziologische Aufklärung 2. Aufsätze zur Theorie der Gesellschaft",
+        pages:"178-203",
+        date:"1991",
+        publisher:"Westdeutscher Verlag",
+        place:"Opladen",
+        key:"Luhmann-1991-Positives",
+        pubmedId:"3355",
+        attachments:"Luhmann-1991-Positives.pdf",
+        dateAdded:"2011-08-26",
+        collections:"Autonomy of Law;Ideology",
+        info : JSON.stringify( info ) // TODO this is dumb
+      };
+      var target = info.target;
+      enabledAPIs[ target.application]
+        .createItem( target.type, target.id, itemData, target.collectionKey );
     }
+
   };
   return services;
 };

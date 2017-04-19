@@ -1,10 +1,7 @@
+var pluginable      = require('pluginable'); // plugin management https://github.com/confuser/node-pluginable
 var glob            = require('glob');
-var pluginable      = require('pluginable');
 
-// plugin management provided by
-// https://github.com/confuser/node-pluginable
-
-// Promise shimmings
+// Promise shimmings TODO Remove
 require('promise.prototype.finally').shim();
 Promise.waterfall = require('p-waterfall');
 Promise.series    = require('p-series');
@@ -15,5 +12,11 @@ glob('./plugin/**/plugin.js', {realpath:true}, function (error, files) {
   var pluginLoader = pluginable(files);
   pluginLoader.load(function (error) {
     if (error) throw(error);
+    try{
+      //https://github.com/sindresorhus/opn
+      //require('opn')('http://localhost:3000/source',{app: 'google chrome'});
+    } catch(e) {
+      console.log("Could not open browser:" + e);
+    }
   });
 });

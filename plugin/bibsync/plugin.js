@@ -125,12 +125,57 @@ module.exports = function bibsync(datastore,done)
      */
     showProgress : function (percent,message,newLogText){
       var params = {
-        progress : percent,
+        progress : percent||0,
         message: message,
         newLogText : newLogText || ""
       };
       if(percent === 0) params.logContent="";
       io.emit("progress.show", params);
+    },
+
+    hideProgress : function(){
+      io.emit("progress.show", false);
+    },
+
+    /**
+     * Call a RPC method on the client
+     * @param  {String} eventName The name of the event bound to the method
+     * @param  {Object} args   A map of named Arguments
+     * @return {Promise} A promise resolving with the result of the method
+     */
+    callClientMethod : function( methodname, args){
+      return new Promise(function(resolve, reject) {
+        io.on('connection', function(socket){
+          socket.emit( eventName, args, function(result){
+            if( result && typeof result == "object" && result.error !== undefined ){
+              reject(result.error);
+            } else {
+              resolve(result);
+            }
+          });
+        });
+      });
+    },
+
+    /**
+     * Binds an event name to a class method
+     * @param  {String} eventName The name of the event bound to the method
+     * @param  {function} method The method function
+     * @return {void}
+     */
+    bindRpcMethod : function( eventName, method ){
+      io.on('connection', function (socket) {
+        socket.on(eventName, function (args, done) {
+          var result = method(args);
+          if ( result instanceof Promise ) {
+            result.then(done).catch(function(e){
+              done({error: ""+e});
+            });
+          } else {
+            throw new Error("RPC methods must return a promise!");
+          }
+        });
+      });
     },
 
     /**
@@ -152,9 +197,9 @@ module.exports = function bibsync(datastore,done)
      * @return {Function} A function that sends a HTTP error response
      */
     fail: function(res){
-      return function( error ){
-        console.warn(""+err);
-        res.status(500).send(""+err);
+      return function( err ){
+        console.error( err.stack );
+        res.status(500).send( err.message );
       };
     },
 
@@ -182,11 +227,14 @@ module.exports = function bibsync(datastore,done)
     'to/:targetApplication/:targetType/:targetId/:targetCollectionKey/:action',
     services.startSync
   );
-  router.get(
-    '/copy/:sourceApplication/:sourceType/:sourceId/:sourceCollectionKey/'+
-    'to/:targetApplication/:targetType/:targetId/:targetCollectionKey/',
-    services.copyFolder
-  );
+
+  sandbox.bindRpcMethod("bibsync.copy", services.copyFolder );
+
+  // tests
+  router.get('/test', services.test );
+  sandbox.bindRpcMethod("test-success",function(args){
+    return Promise.resolve("RPC test successful");
+  });
 
   // start server when all plugins have been loaded
   this.on('afterFinished', function () {
@@ -194,6 +242,8 @@ module.exports = function bibsync(datastore,done)
       console.info('BibSync server listening on http://localhost:3000 ...');
     });
   });
+
+
 
   // plugin is initiatized
   done(null, sandbox);

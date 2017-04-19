@@ -48,7 +48,7 @@ qx.Class.define("bibsync.Application", {
 
       this.setupUI();
 
-      // make sure the image resources are used.
+      // make sure the image resources are used. TODO use compiler hint
       qx.ui.tree.VirtualTree;
       qx.ui.form.SelectBox;
     },
@@ -58,20 +58,8 @@ qx.Class.define("bibsync.Application", {
      * @return {void}
      */
     setupUI: function() {
-
-      var progressWidget = new dialog.Progress();
-      this.setProgressWidget(progressWidget);
-      var socket = io();
-      socket.on("progress.show",function(m){
-        if ( m ){
-          progressWidget.set(m).show();
-        } else {
-          progressWidget.hide();
-        }
-      });
-
       // render main layout
-      // todo - use loadForm() instead?
+      // TODO - use loadForm() instead?
       qookery.contexts.Qookery.loadResource("bibsync/forms/application.xml", this, function(xmlSource) {
         var xmlDocument = qx.xml.Document.fromString(xmlSource);
         var parser = qookery.Qookery.createFormParser();
@@ -85,20 +73,90 @@ qx.Class.define("bibsync.Application", {
           });
           this.__formComponent = formComponent;
 
-          // initialize if succesful
-          this.init();
-
         } catch (e) {
           this.error("Error parsing application root form", e);
         } finally {
           parser.dispose();
         }
+
+        /*
+         Socket.io communication
+         */
+        var socket = io();
+
+        // Progress Widget
+        var progressWidget = new dialog.Progress();
+        this.setProgressWidget(progressWidget);
+        socket.on("progress.show",function(m){
+          if ( m && typeof m == "object" ){
+            progressWidget.set(m);
+            progressWidget.setEnabled(true);
+            if(!progressWidget.isVisible()){
+              progressWidget.setUseBlocker(false);
+              progressWidget.show();
+            }
+          } else {
+            progressWidget.hide();
+          }
+        });
+
+        /**
+         * Binds an event name to a class method
+         * @param  {String} eventName The name of the event bound to the method
+         * @param  {function} method The given function
+         * @return {void}
+         */
+        function bindRpcMethod( eventName, method ){
+          socket.on(eventName, function (args, done) {
+            var result = method(args);
+            if ( result instanceof Promise ) {
+              result.then(done).catch(function(e){
+                done({error: ""+e});
+              });
+            } else {
+              throw new Error("RPC methods must return a promise!");
+            }
+          });
+        }
+
+        /**
+         * Call a RPC method on the server
+         * @param  {String} eventName The name of the event bound to the method
+         * @param  {Object} args   A map of named Arguments
+         * @return {Promise} A promise resolving with the result of the method
+         */
+        this.callServerMethod = function( eventName, args){
+          return new Promise(function(resolve, reject) {
+            socket.emit(eventName, args, function(result){
+              if( result && typeof result == "object" && result.error !== undefined ){
+                reject(result.error);
+              } else {
+                resolve(result);
+              }
+            });
+          });
+        };
+
+        // test it
+        this.callServerMethod("test-success").then(function(result){
+          if( result == "RPC test successful"){
+            console.info(result);
+          } else {
+            console.warn("RPC test failed.");
+          }
+        });
+
+        // initialize if succesful
+        this.init();
+
+
       });
     },
 
     /**
      * Creates and/or returns a qx.io.rest.Resouce responsible for retrieving
      * data for form components.
+     * TODO sync and copy actions should be POST
      * @param  {String} name Unique name of the Resource
      * @return {qx.io.rest.Resource}      The resource
      */
@@ -122,11 +180,6 @@ qx.Class.define("bibsync.Application", {
             url: "/sync/{sourceApplication}/{sourceType}/{sourceId}/{sourceCollectionKey}" +
                  "/to/{targetApplication}/{targetType}/{targetId}/{targetCollectionKey}/{action}"
           },
-          copy : {
-            method: "GET",
-            url: "/copy/{sourceApplication}/{sourceType}/{sourceId}/{sourceCollectionKey}" +
-                 "/to/{targetApplication}/{targetType}/{targetId}/{targetCollectionKey}"
-          },
           removeCollectionItem : {
             method: "DELETE",
             url: "/{application}/{type}/{id}/collections/{collectionKey}/items"
@@ -142,6 +195,10 @@ qx.Class.define("bibsync.Application", {
           updateItem : {
             method: "PATCH",
             url: "/{application}/{type}/{id}/items"
+          },
+          test : {
+            method: "GET",
+            url: "/test"
           }
         });
         resource.addListener("error",function(e){
@@ -194,14 +251,6 @@ qx.Class.define("bibsync.Application", {
       var rightSelectBox = this.getForm().getComponent("rightSelectBox").getMainWidget();
       var controller2 = new qx.data.controller.List(null, rightSelectBox, "name");
       libraryStore.bind("model", controller2, "model");
-
-
-      // to save some clicks during development
-      libraryStore.addListener("changeModel",function(e){
-        leftSelectBox.setModelSelection([e.getData().getItem(0)]);
-        rightSelectBox.setModelSelection([e.getData().getItem(4)]);
-      });
-
 
       // load selectboxes
       this.getRestResource("selectBoxes").getLibraries();
@@ -299,8 +348,8 @@ qx.Class.define("bibsync.Application", {
       var librarySelection = this.getForm().getComponent(prefix + "SelectBox").getMainWidget().getModelSelection();
       if( librarySelection.getLength() === 0) return null;
       var table = this.getForm().getComponent(prefix + "Table").getMainWidget();
-      var treeSelection = this.getForm().getComponent(prefix + "Tree").getMainWidget().getSelection();;
-      if (treeSelection.getLength() === 0) return null;
+      var treeSelection = this.getForm().getComponent(prefix + "Tree").getMainWidget().getSelection();
+      if ( treeSelection.getLength() === 0 ) return null;
       return {
         application   : librarySelection.getItem(0).getApplication(),
         id            : librarySelection.getItem(0).getId(),
@@ -544,6 +593,8 @@ qx.Class.define("bibsync.Application", {
           }
         } else {
           component.close();
+          this.loadTable("left");
+          this.loadTable("right");
         }
       },this);
 
@@ -604,27 +655,24 @@ qx.Class.define("bibsync.Application", {
       var msg = "This will copy the folder and its content selected in the left "+
       "pane into the folder selected in the right pane. Continue?";
       if( ! confirm( msg ) ) return;
-
       var info={
         source  : this.getCollectionInfo(source),
         target  : this.getCollectionInfo(target)
       };
       if( ! info.source || ! info.target ) return;
-      var params = {
-        sourceApplication : info.source.application,
-        sourceType        : info.source.type,
-        sourceId          : info.source.id,
-        sourceCollectionKey : info.source.collectionKey,
-        targetApplication : info.target.application,
-        targetType        : info.target.type,
-        targetId          : info.target.id,
-        targetCollectionKey : info.target.collectionKey
-      };
-      var rest = this.getRestResource("copy");
-      rest.addListenerOnce("copySuccess",function(){
+      this.callServerMethod("bibsync.copy", info)
+      .then(function(){
         this.loadTree( target, info.target.collectionKey );
-      },this);
-      rest.copy(params);
+      }.bind(this));
+    },
+
+    /**
+     * Run the current test
+     * @return {[type]} [description]
+     */
+    runTest : function()
+    {
+        this.getRestResource("test").test();
     }
 
   }

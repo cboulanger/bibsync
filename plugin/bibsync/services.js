@@ -20,6 +20,17 @@ module.exports = function(sandbox)
    */
   var cache = {};
 
+  /*
+   Observe progress widget's cancel button
+   TODO solve this in a more generic way
+   */
+  var cancelAction = false;
+  sandbox.getSocket().on('connection', function (socket) {
+    socket.on("progress.cancel", function () {
+      cancelAction = true;
+    });
+  });
+
   // Services
   var services = {
     /**
@@ -437,8 +448,16 @@ module.exports = function(sandbox)
         // serially iterate over data using promise-returning functions and array.prototype.reduce:
         // http://taoofcode.net/promise-anti-patterns/
         var numItems = items.length;
+
         return items.reduce(function( promise, itemData, index ){
           return promise.then(function(){
+            // user pressed "cancel" button
+            if( cancelAction ){
+              console.info("User cancelation...");
+              sandbox.showProgress( (index/numItems)*100, "Aborting...");
+              return Promise.resolve();
+            }
+            // continue
             sandbox.showProgress(
               (index/numItems)*100,
               "Copying " + (index+1) + " of " + numItems + " items.",
@@ -456,6 +475,7 @@ module.exports = function(sandbox)
       .then(function(){
         sandbox.hideProgress();
         sandbox.hideProgress();
+        cancelAction=false; // important!
         console.debug("Done.");
       })
       .catch(function(err){

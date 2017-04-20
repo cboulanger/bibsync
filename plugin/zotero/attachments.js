@@ -140,8 +140,6 @@ module.exports = function (sandbox){
       .then(uploadItemFile)
       .then(registerUpload)
       .then( function(success){
-        sandbox.hideProgress();
-        sandbox.hideProgress();
         var msg = success ? " sucessfully completed." : " failed.";
         console.log("Transfer of " + sourceItem.get("title") + msg );
         return success;

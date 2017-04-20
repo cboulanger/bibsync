@@ -4,6 +4,8 @@
  * @asset(qx/decoration/Modern/arrows-combined.png)
  * @asset(qx/icon/Tango/22/places/folder-open.png)
  * @asset(qx/icon/Tango/22/places/folder.png)
+ *
+ * TODO Add clear cache button
  */
 qx.Class.define("bibsync.Application", {
   extend: qx.application.Standalone,
@@ -87,12 +89,19 @@ qx.Class.define("bibsync.Application", {
         // Progress Widget
         var progressWidget = new dialog.Progress();
         this.setProgressWidget(progressWidget);
+        progressWidget.set({
+          useBlocker : true,
+          blockerOpacity : 1,
+          allowCancel : true
+        }); // TODO add dontHideWhenCancelled Property to Dialog widget
+        progressWidget.addListener("cancel",function(){
+          this.callServerMethod("progress.cancel");
+        },this);
         socket.on("progress.show",function(m){
           if ( m && typeof m == "object" ){
             progressWidget.set(m);
-            progressWidget.setEnabled(true);
             if(!progressWidget.isVisible()){
-              progressWidget.setUseBlocker(false);
+              progressWidget.setEnabled(true);
               progressWidget.show();
             }
           } else {

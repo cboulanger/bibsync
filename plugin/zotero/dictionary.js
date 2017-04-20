@@ -174,7 +174,15 @@ var fields_toLocal =
   },
   language: 'language',
   place: 'place',
-  notes: 'notes',
+  notes: {
+    translateFieldName   : function(data) {
+      return "notes";
+    },
+    translateContent : function(data){
+      var content = data.notes.replace(/(?:\r\n|\r|\n)/g, '<br />');
+      return content;
+    }
+  },
   numberOfVolumes: 'numberOfVolumes',
   numPages: 'numPages',
   originalPublication: 'originalPublication',

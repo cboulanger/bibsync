@@ -63,6 +63,7 @@ module.exports = function bibsync(datastore,done)
 
     /**
      * Returns the socket.io object
+     * TODO Name is wrong, it's the socket.io server that is returned, not a socket
      * @return {Object}
      */
     getSocket : function()

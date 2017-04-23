@@ -1,11 +1,6 @@
 var pluginable      = require('pluginable'); // plugin management https://github.com/confuser/node-pluginable
 var glob            = require('glob');
 
-// Promise shimmings TODO Remove
-require('promise.prototype.finally').shim();
-Promise.waterfall = require('p-waterfall');
-Promise.series    = require('p-series');
-
 // load plugins
 glob('./plugin/**/plugin.js', {realpath:true}, function (error, files) {
   if( error) throw error;

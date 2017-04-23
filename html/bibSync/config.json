@@ -41,7 +41,7 @@
   "let" :
   {
     "APPLICATION"  : "bibsync",
-    "QOOXDOO_PATH" : "../../lib/qooxdoo-5.0",
+    "QOOXDOO_PATH" : "../../lib/qooxdoo",
     "QXTHEME"      : "bibsync.theme.Theme",
     "API_EXCLUDE"  : ["qx.test.*", "${APPLICATION}.theme.*", "${APPLICATION}.test.*"],
     "LOCALES"      : [ "en" ],
@@ -61,7 +61,7 @@
           "manifest": "../../lib/qookery/qookery/Manifest.json"
         },
         {
-          "manifest": "../../qx-contrib-Dialog/Manifest.json"
+          "manifest": "../../lib/qx-contrib-Dialog/Manifest.json"
         }
       ]
     }

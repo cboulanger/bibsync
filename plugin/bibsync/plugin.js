@@ -139,6 +139,25 @@ module.exports = function bibsync(datastore,done)
     },
 
     /**
+     * Shows a file progress widget on the server
+     * @param  {Integer} percent
+     * @param  {String} message    The message below the progress meter
+     * @return void
+     */
+    showFileProgress : function (percent,message){
+      var params = {
+        progress : percent||0,
+        message: message
+      };
+      if(percent === 0) params.logContent="";
+      io.emit("fileprogress.show", params);
+    },
+
+    hideFileProgress : function(){
+      io.emit("fileprogress.show", false);
+    },
+
+    /**
      * Call a RPC method on the client
      * @param  {String} eventName The name of the event bound to the method
      * @param  {Object} args   A map of named Arguments

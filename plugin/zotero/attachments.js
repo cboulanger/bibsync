@@ -236,21 +236,21 @@ module.exports = function (sandbox){
             })
             .on("data",function(chunk){
               bytes += chunk.length;
-              sandbox.showProgress(bytes/filesize*100,"Downloading "+fileName);
+              sandbox.showFileProgress(bytes/filesize*100,"Downloading "+fileName);
               //console.debug("Sent " +  bytes + " of " + uploadSize + " bytes of data.");
             })
 
             if ( webdav.zipped ){
               readStream.pipe(unzip.Parse())
               .on("close", function(){
-                sandbox.hideProgress();
+                sandbox.hideFileProgress();
                 if( ! found ){
                   console.warn( fileName + " could not be found.");
                   resolve(false);
                 }
               })
               .on("error", function(error){
-                sandbox.hideProgress();
+                sandbox.hideFileProgress();
                 console.warn("Error during decompression: " + error);
                 resolve(false);
               })
@@ -261,12 +261,11 @@ module.exports = function (sandbox){
                   console.debug( "Extracting ZIP file to temporary file ..." );
                   entry.pipe(fs.createWriteStream(filePath))
                   .on("error", function(e){
-                    sandbox.hideProgress();
+                    sandbox.hideFileProgress();
                     console.warn("Error writing extracted file to disk:" + e);
                     resolve(false);
                   })
                   .on("close",function(){
-                    sandbox.hideProgress();
                     console.debug( "Done extracting " + entry.path );
                     resolve(filePath);
                   });
@@ -278,12 +277,11 @@ module.exports = function (sandbox){
               console.debug( "Downloading to temporary file ..." );
               readStream.pipe(fs.createWriteStream(filePath))
               .on("error", function(e){
-                sandbox.hideProgress();
+                sandbox.hideFileProgress();
                 console.warn("Error writing file to disk:" + e);
                 resolve(null);
               })
               .on("close",function(){
-                sandbox.hideProgress();
                 console.debug( "Done writing " + filePath );
                 resolve(filePath);
               });
@@ -337,6 +335,7 @@ module.exports = function (sandbox){
         {
           var fileStat = fs.statSync(filePath);
           var options = getRequestOptions( info.target, targetItem);
+          sandbox.showFileProgress(0,"Uploading to Zotero server...");
           console.debug("Requesting upload authorization for " +  options.url );
           options.form = {
             md5     : sourceItem.get("md5") || require('md5-file').sync(filePath),
@@ -397,10 +396,13 @@ module.exports = function (sandbox){
             console.debug("Received upload authorization...");
             // File is duplicate
             if ( uploadConfig.exists ) {
+              sandbox.showFileProgress(99,"File exists.");
+              setTimeout(sandbox.hideFileProgress,3000);
               console.log("File '" + filename + "' already exists.");
               return Promise.resolve(true);
             }
             function cleanupAndReject(err){
+              sandbox.hideFileProgress();
               fs.unlinkSync(filePath);
               throw new Error(err);
             }
@@ -419,15 +421,16 @@ module.exports = function (sandbox){
               var writeStream = request.post(options)
               .on("error", cleanupAndReject )
               .on('response', function(response) {
+                sandbox.hideFileProgress();
+                fs.unlinkSync(filePath);
                 switch( response.statusCode ){
                   case 201:
                   case 204:
                   console.debug("Upload completed. Bytes written: " + bytes);
-                  fs.unlinkSync(filePath);
                   return resolve(uploadConfig.uploadKey);
                   default:
                   var err = "Http Error " + response.statusCode + ": " + response.headers;
-                  cleanupAndReject( err );
+                  reject( err );
                 }
               });
               // Create ReadStream and pipe into WriteStream
@@ -439,10 +442,10 @@ module.exports = function (sandbox){
                 intoStream(uploadConfig.suffix)
               ];
               multiStream(streams)
-              .on("error", reject )
+              .on("error", cleanupAndReject)
               .on("data",function(chunk){
                 bytes += chunk.length;
-                sandbox.showProgress(bytes/uploadSize*100,"Uploading "+ filename );
+                sandbox.showFileProgress(bytes/uploadSize*100,"Uploading "+ filename );
                 //console.debug("Sent " +  bytes + " of " + uploadSize + " bytes of data.");
               })
               .pipe( writeStream );

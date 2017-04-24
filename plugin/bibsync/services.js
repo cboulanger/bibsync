@@ -448,12 +448,15 @@ module.exports = function(sandbox)
         // serially iterate over data using promise-returning functions and array.prototype.reduce:
         // http://taoofcode.net/promise-anti-patterns/
         var numItems = items.length;
-
+        var cancelMsg = false;
         return items.reduce(function( promise, itemData, index ){
           return promise.then(function(){
             // user pressed "cancel" button
             if( cancelAction ){
-              console.info("User cancelation...");
+              if( ! cancelMsg ) {
+                console.info("User cancelation...");
+                cancelMsg = true;
+              }
               sandbox.showProgress( (index/numItems)*100, "Aborting...");
               return Promise.resolve();
             }

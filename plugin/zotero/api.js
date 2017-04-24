@@ -1,6 +1,5 @@
 // modules
-var Zotero      = require('libzotero');
-//var Promise     = require('promise');
+var Zotero      = require('../../lib/libZoteroJS/src/libzotero');
 var JsonClient  = require('json-client');
 var request     = require('request');
 var _           = require('underscore');

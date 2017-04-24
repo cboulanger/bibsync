@@ -1,6 +1,7 @@
 var osascript     = require('node-osascript');
 var md5           = require('md5');
-var _             = require("underscore");
+var _             = require('underscore');
+var slashes       = require('slashes');
 
 /**
  * Bookends API
@@ -21,7 +22,7 @@ module.exports = function(sandbox)
    * @param  {String} eventCode
    * @return {String}
    * TODO : move into module
-   */
+   */ 
   function eventCode(eventCode) {
     return 'tell application "Bookends" to «event ToyS' + eventCode + '»';
   }
@@ -416,13 +417,14 @@ module.exports = function(sandbox)
         var data = [], i = 1;
         result.forEach(function(taggedData) {
           var dict = {};
-          var fieldName = "";
+          var fieldName = "", content="";
           taggedData.split(/\r/).map(function(line) {
             var i = line.indexOf(":");
             var maybeFieldName = i > 0 ? line.substring(0, i) : "";
             if ( dictionary.isLocalField(maybeFieldName) ) {
               fieldName = maybeFieldName;
-              dict[fieldName] = line.substring(i + 2);
+              content = line.substring(i + 2);
+              dict[fieldName] = slashes.strip(content);
             } else if (fieldName && ! maybeFieldName ) {
               // append to current mulit-line field
               if ( fieldName == "abstract" || fieldName == "notes") {

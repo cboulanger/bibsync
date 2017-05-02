@@ -24,7 +24,11 @@ module.exports = function bibsync(datastore,done)
   router.use(bodyParser.urlencoded({ extended: false }));
   router.use(bodyParser.json());
   router.use(express.static('html/bibSync'));
-  router.use(express.static('.')); // only for development
+
+  // expose source files only during development
+  if( config.general.mode == "development" ){
+    router.use(express.static('.'));
+  }
 
   // socket.io
   var server = require('http').Server(router);

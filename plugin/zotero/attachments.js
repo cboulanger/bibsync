@@ -141,7 +141,7 @@ module.exports = function (sandbox){
       .then(registerUpload)
       .then( function(success){
         var msg = success ? " sucessfully completed." : " failed.";
-        console.log("Transfer of " + sourceItem.get("title") + msg );
+        console.info("Transfer of " + sourceItem.get("title") + msg );
         return success;
       });
 

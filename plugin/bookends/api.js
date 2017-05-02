@@ -22,7 +22,7 @@ module.exports = function(sandbox)
    * @param  {String} eventCode
    * @return {String}
    * TODO : move into module
-   */ 
+   */
   function eventCode(eventCode) {
     return 'tell application "Bookends" to «event ToyS' + eventCode + '»';
   }
@@ -420,12 +420,12 @@ module.exports = function(sandbox)
           var fieldName = "", content="";
           taggedData.split(/\r/).map(function(line) {
             var i = line.indexOf(":");
-            var maybeFieldName = i > 0 ? line.substring(0, i) : "";
-            if ( dictionary.isLocalField(maybeFieldName) ) {
+            var maybeFieldName = i > 0 ? line.substring(0, i) : false;
+            if ( maybeFieldName && dictionary.isLocalField(maybeFieldName) ) {
               fieldName = maybeFieldName;
               content = line.substring(i + 2);
               dict[fieldName] = slashes.strip(content);
-            } else if (fieldName && ! maybeFieldName ) {
+            } else if (fieldName ) {
               // append to current mulit-line field
               if ( fieldName == "abstract" || fieldName == "notes") {
                 dict[fieldName] += "\n" + line;

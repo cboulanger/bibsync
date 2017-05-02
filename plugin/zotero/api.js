@@ -50,11 +50,21 @@ module.exports = function(sandbox)
   }
 
   /*
-   Closure variables for the API
+   Cache
    */
-  var cache = {
-    treeData: {}
-  };
+  var cache;
+  function clearCache(){
+    cache = {
+     treeData: {}
+   };
+   return Promise.resolve();
+  }
+  sandbox.bindRpcMethod("bibsync.clearCache", clearCache);
+  clearCache();
+
+  /*
+    Group libraries
+   */
   var groupLibraries = [];
 
   /*

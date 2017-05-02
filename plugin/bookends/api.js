@@ -68,10 +68,16 @@ module.exports = function(sandbox)
   /*
     Cache
    */
-  var cache = {
-    treeData: {},
-    keyMap: {}
-  };
+  var cache;
+  function clearCache(){
+    cache = {
+     treeData: {},
+     keyMap: {}
+   };
+   return Promise.resolve();
+  }
+  sandbox.bindRpcMethod("bibsync.clearCache", clearCache);
+  clearCache();
 
   /*
   -------------------------------------------------------------------------

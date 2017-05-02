@@ -77,5 +77,10 @@
                 $.Qookery.getService("app").runTest();
             </script>
         </button>
+        <button label="Clear Cache" id="btnClearCaches" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").clearCache();
+            </script>
+        </button>
     </composite>
 </form>

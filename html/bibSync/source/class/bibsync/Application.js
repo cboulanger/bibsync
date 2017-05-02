@@ -827,6 +827,17 @@ qx.Class.define("bibsync.Application", {
      */
     runTest: function() {
       this.getRestResource("test").test();
+    },
+
+    /**
+     * Clear the caches on the backend
+     * @return {[type]} [description]
+     */
+    clearCache: function() {
+      this.callServerMethod("bibsync.clearCache")
+      .then(function(){
+        window.location.reload();
+      });
     }
   }
 });

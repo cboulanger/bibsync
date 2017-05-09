@@ -1,7 +1,8 @@
 {
-  "name": "bookends-osa-node",
-  "version": "1.0.0",
+  "name": "bibsync",
+  "version": "0.5.0",
   "description": "",
+  "bin": "server.js",
   "main": "server.js",
   "scripts": {
     "test": "test.js",

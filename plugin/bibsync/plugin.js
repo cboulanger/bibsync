@@ -262,8 +262,9 @@ module.exports = function bibsync(datastore,done)
 
   // start server when all plugins have been loaded
   this.on('afterFinished', function () {
-    server.listen(3000, function () {
-      console.info('BibSync server listening on http://localhost:3000 ...');
+    var port = process.env.PORT||3000;
+    server.listen(port, function () {
+      console.info('BibSync server listening on http://localhost:'+port);
     });
   });
 

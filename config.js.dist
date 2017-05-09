@@ -1,25 +1,46 @@
+// config object
 module.exports = {
+  general : {
+    mode : "development" // one of "development", "production"
+  },
   zotero : {
+    hasLibraries : true,
+    name   : "Zotero",
     enabled : true,
-    apiKey : "",
-    userId : 0,
-    webdavUrl : "",
-    webdavUser : "",
-    webdavPassword : ""
+    // apiKey : "<your API key here>",
+    // userId : <your user id here>,
+    storage : {
+      // webdav : {
+      //   zipped : true,
+      //   filenameKey : "key",
+      //   url  : "xxx",
+      //   user : "xxx",
+      //   password : "xxx"
+      // }
+    }
   },
   bookends : {
+    hasLibraries : true,
+    name : "Bookends",
     enabled : false,
-    attachmentPath : ""
+    storage : {
+      // webdav : {
+      //   zipped : false,
+      //   filenameKey : "filename",
+      //   url  : "xxx",
+      //   user : "xxx",
+      //   password : "xxx"
+      // }
+    }
+  },
+  datastore : {
+    filename : __dirname + '/data/syncdata'
   },
 
-  /**
-   * configuration for the console object (see below)
-   * @type {Object}
-   */
   console : {
     development : {
       uncaughtExceptionCatch: true,                   // Do we want to catch uncaughtExceptions?
-      consoleFilter:          [],         // Filter these console output types
+      consoleFilter:          ['LOG','DEBUG'],        // Filter these console output types
       logToFile:              false,                    // if true, will put console output in a log file folder called 'logs'
       logFilter:              [],   // Examples: Filter these types to not log to file
       colors:                 true                     // do we want pretty pony colors in our console output?

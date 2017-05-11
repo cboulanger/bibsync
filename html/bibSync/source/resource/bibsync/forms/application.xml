@@ -72,6 +72,11 @@
                 $.Qookery.getService("app").sync("right", "left");
             </script>
         </button>
+        <button label="Extract chapters" id="btnExtrChpts" enabled="true">
+            <script event="execute">
+                $.Qookery.getService("app").extractChapters();
+            </script>
+        </button>        
         <button label="Run test" id="btnRunTest" enabled="true">
             <script event="execute">
                 $.Qookery.getService("app").runTest();

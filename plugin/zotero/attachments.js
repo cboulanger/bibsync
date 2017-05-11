@@ -491,7 +491,7 @@ module.exports = function (sandbox){
           options.headers["If-None-Match"] = "*";
           return new Promise(function(resolve, reject){
             request.post(options,function(err, response, body){
-              if ( err ) reject (err);
+              if ( err ) return reject (err);
               switch( response.statusCode){
                 case 200:
                 case 204:

@@ -50,4 +50,18 @@ Alpha/Proof-of-concept, Everything can and will change
 - https://github.com/cboulanger/libZoteroJS (My own fork, with some workarounds for unresolved bugs)
 - https://github.com/louischatriot/nedb (A simple file-based key-value store)
 - https://github.com/request/request (A library to make http/s requests)
+- https://www.npmjs.com/package/download (conveniently download files)
+- https://www.npmjs.com/package/scissors (to manipulate pdfs)
+- http://stringjs.com/ (String manipulation library)
+- http://underscorejs.org/ (Array and object manipulation library)
 
+## Scissors dependencies
+#Linux:
+```
+apt-get install pdftk ghostscript poppler-utils
+```
+#Mac
+Download from https://www.pdflabs.com/tools/pdftk-server/#download
+```
+brew install ghostscript xpdf
+``` 

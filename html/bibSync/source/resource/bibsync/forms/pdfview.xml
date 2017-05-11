@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form xmlns="http://www.qookery.org/ns/Form"
+  id="pdfview"
+  column-count="2" column-flexes="1 1"
+  row-count="4" row-flexes="0 1 0 0"
+  title="View Chapter">
+
+    <import class="qookery.contexts.Qookery"/>
+
+    <script>
+      var socket = $.Qookery.getService("app").getSocket();
+      socket.on("pdfview.show", function(m){
+        $.Qookery.openWindow(this);
+        $("leftImage").setSource(m.leftImage);
+        $("rightImage").setSource(m.rightImage);
+        $("text").setLabel(m.text);
+      });
+    </script>
+
+    <!-- label row -->
+    <label label="First page" font="bold" align-x="center" />
+    <label label="Last page" font="bold" align-x="center" />
+    
+    <!-- image row -->
+    <image id="leftImage" height="auto" width="300" label="%none" />
+
+    <image id="rightImage" height="auto" width="300" label="%none" />
+    
+    <!-- text -->
+    <composite column-count="auto" align-x="center" col-span="2">
+      <label id="text" rich="true" />
+    </composite>
+
+    <!-- button row -->
+    <composite column-count="auto" align-x="center" >
+        <button label="- 1">
+            <script event="execute">
+                $.Qookery.getService("app").getSocket().emit("pdfview.changePage",{left:-1});
+            </script>
+        </button>
+        <button label="+ 1">
+            <script event="execute">
+                $.Qookery.getService("app").getSocket().emit("pdfview.changePage",{left:+1});
+            </script>
+        </button>
+    </composite>
+    <composite column-count="auto" align-x="center" >
+        <button label="- 1">
+            <script event="execute">
+                $.Qookery.getService("app").getSocket().emit("pdfview.changePage",{right:-1});
+            </script>
+        </button>
+        <button label="+ 1">
+            <script event="execute">
+                $.Qookery.getService("app").getSocket().emit("pdfview.changePage",{right:+1});
+            </script>
+        </button>        
+        <button label="Cancel">
+            <script event="execute">
+                $.form.close(null);
+            </script>
+        </button>
+        <button label="OK">
+            <script event="execute">
+                $.Qookery.getService("app").getSocket().emit("pdfview.ok");
+                $.form.close(null);
+            </script>
+        </button>
+    </composite>
+</form>

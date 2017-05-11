@@ -79,12 +79,47 @@ qx.Class.define("bibsync.Application", {
           } finally {
             parser.dispose();
           }
+          
+          // pdfview window
+          qookery.contexts.Qookery.loadForm(
+            "resource/bibsync/forms/pdfview.xml",
+            this, { fail: function(e) { console.error(e); } }
+          );
 
           /*
            Socket.io communication
            */
           var socket = io();
           this.createProgressWidgets(socket);
+          
+          this.getSocket = function(){
+            return socket;
+          };
+          
+          // alert
+          socket.on("alert",(msg)=>{
+            dialog.Dialog.alert(msg)
+            .set({enabled:true})
+            .promise().then(()=>{
+              qx.core.Init.getApplication().getRoot().setEnabled(true);
+            });
+          });
+          
+          // error
+          socket.on("error",(msg)=>{
+            dialog.Dialog.error(msg)
+            .set({enabled:true})
+            .promise().then(()=>{
+              qx.core.Init.getApplication().getRoot().setEnabled(true);
+            });            
+          });
+          
+          // prompt the user
+          socket.on("promptUser",(msg,done)=>{
+            dialog.Dialog.prompt(msg)
+            .set({enabled:true})
+            .promise().then(done);
+          });
 
           /**
            * Binds an event name to a class method
@@ -826,7 +861,27 @@ qx.Class.define("bibsync.Application", {
      * @return {[type]} [description]
      */
     runTest: function() {
-      this.getRestResource("test").test();
+      qx.core.Init.getApplication().getRoot().setEnabled(false);
+      this.callServerMethod("bibsync.test").then(
+        function(result) {
+          console.info("Test function returned: " + result);
+          qx.core.Init.getApplication().getRoot().setEnabled(true);
+        }.bind(this)
+      );      
+    },
+    
+    /**
+     * Extract chapters from books in currently selected folder
+     * @return {[type]} [description]
+     */
+    extractChapters : function(){
+      var info = this.getCollectionInfo("left");
+      qx.core.Init.getApplication().getRoot().setEnabled(false);
+      this.callServerMethod("bibsync.extractChapters", info).then(
+        function(result) {
+          qx.core.Init.getApplication().getRoot().setEnabled(true);
+        }.bind(this)
+      );
     },
 
     /**

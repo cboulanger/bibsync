@@ -7,7 +7,7 @@ const scissors = require("scissors");
 const Zotero = require('../../../lib/libZoteroJS/src/libzotero');
 
 /**
- * BibSync service methods
+ * TODO Rename to pdftools.js
  * @param  {Object} sandbox An object exposing the application API
  * @return {Object} An object exposing the service methods
  */
@@ -342,22 +342,22 @@ module.exports = function(sandbox)
       }
       
       /**
-       * Returns the offset between the first PDF page and "page 1" of the book.
+       * Returns the offset between PDF page numbers and those of the the book.
        * @param {Zotero.Item} bookItem
        * @return {Promise} A promise that resolves with the page number or false if there was a problem
        */
       async function getOffset(bookItem){
-        let page1 = await sandbox.promptUser(`Please enter the page in ${bookItem.get('title')} that is page 1 of the book`);
-        if( ! page1 ) {
+        let page = await sandbox.promptUser(`In order to correctly extract the chapters from "${bookItem.get('title')}", please enter the number of the page in the PDF that corresponds to page 20 in the book.`);
+        if( ! page ) {
           console.debug(">>> User cancelation.");
           return false;
         }
-        page1= parseInt(page1);
-        if(page1===0 || isNaN(page1)){
+        page= parseInt(page);
+        if(page===0 || isNaN(page)){
           sandbox.clientError("Invalid page number!");
           return false;
         }
-        return page1-1;
+        return page-20;
       }
       
       /**
@@ -605,14 +605,25 @@ module.exports = function(sandbox)
        */
       function parseCreators(str,creatorType="author"){
         let creators = [];
-        let names = str.split(/(&|und|and|\/|;)/);
+        let names = str.split(/(&| und | and |\/|;)/g)
+                    .map((t)=>$(t).trim().toString())
+                    .filter((t)=>t.length > 1);
+        //console.debug(names);
         names.forEach((name)=>{
+          if ( ! name ) return; 
           let lastSpace = name.lastIndexOf(" ");
-          creators.push({
-            creatorType,
-            firstName : $(name).substr(0,lastSpace).trim().toString(),
-            lastName  : $(name).substr(lastSpace).trim().toString()
-          });
+          if( lastSpace == -1) {
+            creators.push({
+              creatorType,
+              name
+            });
+          } else {
+            creators.push({
+              creatorType,
+              firstName : $(name).substr(0,lastSpace).trim().toString(),
+              lastName  : $(name).substr(lastSpace).trim().toString()
+            });
+          }
         });
         return creators;
       }

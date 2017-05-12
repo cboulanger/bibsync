@@ -10,6 +10,7 @@
  *
  * TODO Add clear cache button
  */
+/*global qx dialog qookery io */
 qx.Class.define("bibsync.Application", {
   extend: qx.application.Standalone,
 
@@ -861,8 +862,14 @@ qx.Class.define("bibsync.Application", {
      * @return {[type]} [description]
      */
     runTest: function() {
+      let range = prompt("Please enter the page range");
+      if( ! range || ! range.match(/[0-9]+\-[0-9]+/)){
+        alert("invalid range");
+        return; 
+      }
+      let range = range.split(/\-/).map((page)=>parseInt(page));
       qx.core.Init.getApplication().getRoot().setEnabled(false);
-      this.callServerMethod("bibsync.test").then(
+      this.callServerMethod("bibsync.test",range).then(
         function(result) {
           console.info("Test function returned: " + result);
           qx.core.Init.getApplication().getRoot().setEnabled(true);

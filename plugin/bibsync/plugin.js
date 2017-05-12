@@ -331,10 +331,11 @@ module.exports = function bibsync(datastore,done)
     return Promise.resolve("RPC test successful");
   });
   sandbox.bindRpcMethod("bibsync.test",function(args){
-    return Promise.resolve("No test is active");
+    return services.extractRange(args);
   });
-   sandbox.bindRpcMethod("bibsync.extractChapters",function(info){
-    return services.createChaptersFromToc(info);
+  var pdfeditor =  require("./service/pdfeditor")(sandbox);
+  sandbox.bindRpcMethod("bibsync.extractChapters",function(info){
+    return pdfeditor.createChaptersFromToc(info);
   });
   
 

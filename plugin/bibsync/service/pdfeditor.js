@@ -576,7 +576,7 @@ module.exports = function(sandbox)
       /**
        * Saves a Zotero.Item object to the server
        * @param {Zotero.Item} item
-       * @return {Promise} A Promise that resolves with the item key
+       * @return {Promise} A Promise that resolves with the updated item
        */
       async function saveItem(item) {
         try {

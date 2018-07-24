@@ -38,6 +38,14 @@ cd ../..
 ## Development status
 Alpha/Proof-of-concept, Everything can and will change
 
+## Extract chapters feature
+- add a note containing the table of contents
+- separate author, title and page information with a pipe symbol (`|`). They must
+  be in one paragraph (can be separated by manual line breaks).
+- The second line of the note MUST contain the string `[bibsync-toc:authors|title|pages]`.
+  `authors`,`title`, `pages` can also be in a different order, depending on how they
+  are placed in the chapter information in the TOC.
+
 ## Resources
 - https://nodejs.org/api/ (The Node Standard Library)
 - http://expressjs.com/de/api.html (The express http server)
@@ -56,11 +64,11 @@ Alpha/Proof-of-concept, Everything can and will change
 - http://underscorejs.org/ (Array and object manipulation library)
 
 ## Scissors dependencies
-#Linux:
+# Linux:
 ```
 apt-get install pdftk ghostscript poppler-utils
 ```
-#Mac
+# Mac
 Download from https://www.pdflabs.com/tools/pdftk-server/#download
 ```
 brew install ghostscript xpdf

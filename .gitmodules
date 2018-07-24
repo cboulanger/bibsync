@@ -1,13 +1,3 @@
-[submodule "lib/qookery"]
-	path = lib/qookery
-	url = git://github.com/ergobyte/qookery.git
-[submodule "lib/qx-contrib-Dialog"]
-	path = lib/qx-contrib-Dialog
-	url = https://github.com/cboulanger/qx-contrib-Dialog.git
-	branch = pre1.3
 [submodule "lib/libZoteroJS"]
 	path = lib/libZoteroJS
 	url = https://github.com/cboulanger/libZoteroJS.git
-[submodule "lib/qooxdoo"]
-	path = lib/qooxdoo
-	url = https://github.com/qooxdoo/qooxdoo.git

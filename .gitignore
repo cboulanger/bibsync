@@ -1,6 +1,12 @@
-config.js
-.DS_Store
+# Application
+/config.js
+/data/*
+/tmp/*
+
+# qooxdoo-compiler
+/*-output
+/contrib
+
+# etc.
 node_modules
-.tern-project
-data/*
-tmp/*
+.DS_Store

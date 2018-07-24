@@ -867,7 +867,7 @@ qx.Class.define("bibsync.Application", {
         alert("invalid range");
         return; 
       }
-      let range = range.split(/\-/).map((page)=>parseInt(page));
+      range = range.split(/\-/).map((page)=>parseInt(page));
       qx.core.Init.getApplication().getRoot().setEnabled(false);
       this.callServerMethod("bibsync.test",range).then(
         function(result) {

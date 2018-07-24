@@ -1,0 +1,27 @@
+{
+
+    "applications": [
+        {
+            "class": "bibsync.Application",
+            "theme": "bibsync.theme.Theme",
+            "name": "bibsync"
+        }
+    ],
+    "libraries": [
+        "./client/bibsync",
+        "./node_modules/qooxdoo-sdk/framework"
+    ],
+    
+    "targets": [
+        {
+            "type": "source",
+            "outputPath": "source-output"
+        },
+        {
+            "type": "build",
+            "outputPath": "build-output"
+        }
+    ],
+    
+    "defaultTarget": "source"
+}

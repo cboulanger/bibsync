@@ -16,7 +16,7 @@ module.exports = function bibsync(datastore,done)
   // custom console
   var console = new Debug(config.console[config.general.mode]);
 
-  // initialize datasource
+  // initialize datastore
   datastore.init(config,console);
 
   // express with api server and static file server

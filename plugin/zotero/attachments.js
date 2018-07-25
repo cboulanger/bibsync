@@ -222,6 +222,8 @@ module.exports = function (sandbox){
             .on("error", reject)
             .on('response', function(response) {
               switch( response.statusCode ){
+                case 401:
+                reject("Authorization with remote WebDAV server failed.");
                 case 404:
                 console.warn("Remote file does not exist.");
                 return resolve( false );
@@ -230,8 +232,8 @@ module.exports = function (sandbox){
                 console.debug("File found.");
                 return;
                 default:
-                console.warn("Got HTTP response " + response.statusCode + ": " + response.headers);
-                return;
+                console.warn("Got HTTP response " + response.statusCode + ": " + JSON.stringify(response.headers));
+                return resolve( false );
               }
             })
             .on("data",function(chunk){
@@ -388,8 +390,9 @@ module.exports = function (sandbox){
         }
         var filename = sourceItem.get("filename");
         if( isWebDav( info.target ) ) {
-          console.log("TODO: uploading zipped file to WebDAV server ...");
-          throw new Error("Not implemented!");
+          console.log("uploading zipped file to WebDAV server ...");
+          uploadToWebDav(info,filePath);
+          //throw new Error("Not implemented!");
         } else {
           return getUploadAutorization(filePath)
           .then(function(uploadConfig){
@@ -452,6 +455,12 @@ module.exports = function (sandbox){
             });
           });
         }
+      }
+
+      function uploadToWebDav(info,filePath){
+        
+
+
       }
 
       /**
